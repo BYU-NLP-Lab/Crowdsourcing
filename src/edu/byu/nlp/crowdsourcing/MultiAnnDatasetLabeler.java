@@ -1,0 +1,281 @@
+/**
+ * Copyright 2013 Brigham Young University
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package edu.byu.nlp.crowdsourcing;
+
+import java.io.IOException;
+import java.io.PrintWriter;
+import java.util.logging.Logger;
+
+import org.apache.commons.math3.random.RandomGenerator;
+
+import com.google.common.io.ByteStreams;
+
+import edu.byu.nlp.classify.data.DatasetBuilder;
+import edu.byu.nlp.classify.data.DatasetLabeler;
+import edu.byu.nlp.classify.eval.Predictions;
+import edu.byu.nlp.crowdsourcing.ModelInitialization.MaxMarginalInitializer;
+import edu.byu.nlp.crowdsourcing.MultiAnnModelBuilders.MultiAnnModelBuilder;
+import edu.byu.nlp.crowdsourcing.gibbs.BlockCollapsedMultiAnnModelMath;
+import edu.byu.nlp.crowdsourcing.gibbs.BlockCollapsedMultiAnnModelMath.DiagonalizationMethod;
+import edu.byu.nlp.data.types.Dataset;
+import edu.byu.nlp.data.types.DatasetInstance;
+import edu.byu.nlp.dataset.Datasets;
+import edu.byu.nlp.util.Matrices;
+
+/**
+ * @author pfelt
+ */
+public class MultiAnnDatasetLabeler implements DatasetLabeler{
+  private static final Logger logger = Logger.getLogger(MultiAnnDatasetLabeler.class.getName());
+
+  private Dataset data;
+  private MultiAnnModelBuilder builder;
+  private boolean predictSingleLastSample;
+  private String trainingOperations;
+  private boolean diagonalizationWithFullConfusionMatrix;
+  private DiagonalizationMethod diagonalizationMethod;
+  private int goldInstancesForDiagonalization;
+  private PrintWriter statsOut;
+  private PrintWriter serializeOut;
+  private String unannotatedDocumentWeight;
+  private RandomGenerator rnd;
+  private boolean truncateUnannotatedData;
+  private PrintWriter debugOut;
+
+
+  public static enum DocWeightAlgorithm{
+    STATIC,
+    BINARY_CLASSIFIER;
+  }
+  
+  private static class DocumentWeightCalculator{
+    private DocWeightAlgorithm strategy;
+    private double staticValue;
+    private Dataset data;
+    private DatasetBuilder binaryDatasetBuilder;
+    public static DocumentWeightCalculator buildCalculator(String strategy, Dataset data){
+      DocumentWeightCalculator calc = new DocumentWeightCalculator();
+      calc.data=data;
+      // parse a number
+      try{
+        calc.strategy=DocWeightAlgorithm.STATIC;
+        calc.staticValue = Double.parseDouble(strategy);
+      }
+      catch(NumberFormatException e){
+        // parse an enum value
+        try{
+          calc.strategy = DocWeightAlgorithm.valueOf(strategy.toUpperCase());
+        }
+        catch(IllegalArgumentException e2){
+          throw new IllegalArgumentException("Document weights must either be a number, "
+              + "or else a valid value of the MultiAnnDtasetLabel.DocWeightAlgorithm enum",e2);
+        }
+      }
+      
+      return calc;
+    }
+    public double weightFor(DatasetInstance instance){
+      
+      switch(strategy){
+      case STATIC:
+        return staticValue;
+      
+      case BINARY_CLASSIFIER:
+        throw new UnsupportedOperationException("not implemented");
+        // train a binary classifier to tell the difference between 
+        // labeled and unlabeled data.
+//        nb = new NaiveBayesLearner().learnFrom(binaryData(data.allInstances()));
+//        
+//        // weight each doc by the probability that it is in the annotated set
+//        double prob = Math.exp(nb.given(instance.getData()).logProbabilityOf(1));
+//        return prob * instance.getData().getNumActiveFeatures();
+        
+      default:
+        throw new IllegalArgumentException(strategy+" not implemented");
+      }
+    }
+    
+//    /**
+//     * create a dataset where labeled examples are class=1 and unlabeled examples
+//     * are class=0
+//     */
+//    private edu.byu.nlp.al.classify2.Dataset binaryData(Collection<DatasetInstance> instances) {
+//      if (binaryDatasetBuilder == null) {
+//        binaryDatasetBuilder = new DatasetBuilder(new LabelChooser<Integer>() {
+//          @Override
+//          public Integer labelFor(Multimap<Long, TimedAnnotation<Integer>> annotations) {
+//            return annotations.size() == 0 ? 0 : 1;
+//          }
+//        }, 2, data.getNumFeatures());
+//      }
+//      return binaryDatasetBuilder.buildDataset(instances, null);
+//    }
+  }
+  
+  /**
+   * @param gold for computing confusion matrices for debugging
+   */
+  public MultiAnnDatasetLabeler(MultiAnnModelBuilder multiannModelBuilder, 
+    PrintWriter debugOut, PrintWriter serializeOut,
+		boolean predictSingleLastSample, String trainingOperations,
+		DiagonalizationMethod diagonalizationMethod,
+		boolean diagonalizationWithFullConfusionMatrix,
+		int goldInstancesForDiagonalization, Dataset trainingData,
+		String unannotatedDocumentWeight,
+		boolean truncateUnannotatedData, 
+		RandomGenerator algRnd) {
+    // TODO (pfelt): in the future we'll probably want to NOT pass in the builder, but create a new builder 
+    // for every label() request. The only problem with that right now is that it's not clear how
+    // to build a Dataset from a collection of instances--it requires indexes generated from the original data???
+    this.builder = multiannModelBuilder;
+    this.predictSingleLastSample = predictSingleLastSample;
+    this.trainingOperations = trainingOperations;
+    this.diagonalizationMethod=diagonalizationMethod;
+    this.diagonalizationWithFullConfusionMatrix=diagonalizationWithFullConfusionMatrix;
+    this.goldInstancesForDiagonalization=goldInstancesForDiagonalization;
+    this.statsOut=(statsOut==null)? new PrintWriter(ByteStreams.nullOutputStream()): statsOut;
+    this.serializeOut=(serializeOut==null)? new PrintWriter(ByteStreams.nullOutputStream()): serializeOut;
+    this.debugOut=(debugOut==null)? new PrintWriter(ByteStreams.nullOutputStream()): debugOut;
+    this.unannotatedDocumentWeight=unannotatedDocumentWeight;
+    this.truncateUnannotatedData=truncateUnannotatedData;
+    this.rnd=algRnd;
+    
+    this.data=trainingData; // should get rid of this after we figure out how to pass instances into the label() method
+  }
+
+
+/** {@inheritDoc} */
+  @Override
+  public Predictions label(
+      Dataset trainingData, 
+      Dataset heldoutData) {
+
+    // FIXME: figure out how to use the instances passed in here before this is usable by MultiAnnSim
+    // for now, the builder has access to the data and knows about new annotation because the training
+    // set is mutated
+//    MultiAnnModelBuilder builder = MultiAnnModel.newModelBuilderWithUniform(priors, trainingData, rnd); 
+    
+    // calculate a weight for each document
+    double[] docWeights = new double[data.getInfo().getNumDocuments()];
+    calculateDocumentWeights(unannotatedDocumentWeight, docWeights);
+    
+    // Train a new model
+    MultiAnnModel model = buildModel(docWeights);
+    
+    // Use it to predict
+    return predict(model, data, heldoutData);
+  }
+
+  /**
+   * @return
+   */
+  private double[] calculateDocumentWeights(String unannotatedStrategy, double[] docWeights) {
+
+    DocumentWeightCalculator passThroughWeightCalc = DocumentWeightCalculator.buildCalculator("1", data);
+    DocumentWeightCalculator unannotatedWeightCalc = DocumentWeightCalculator.buildCalculator(unannotatedStrategy, data);
+    
+    // assign each document a weight (1 indicates no scaling). Must be that 0<=weight<=1
+    int i=0;
+    for (DatasetInstance instance: data){
+      DocumentWeightCalculator weightCalc = instance.getInfo().getNumAnnotations()>0? passThroughWeightCalc: unannotatedWeightCalc;
+      docWeights[i++] = weightCalc.weightFor(instance);
+    }
+    for (double w: docWeights){
+      if (w<0 || w>1){
+        throw new IllegalStateException("doc weights must be between 0 and 1 (inclusive). Not "+w);
+      }
+    }
+    return docWeights;
+  }
+
+
+  // TODO: public for sanity test convenience. Should refactor at some point 
+  public Predictions predict(MultiAnnModel model, Dataset data, Dataset heldoutData) {
+    logConfusions("Before Diagonalizing ", model.getCurrentState());
+    MultiAnnModelPredictor predictor = new MultiAnnModelPredictor(model, data, predictSingleLastSample, diagonalizationMethod, goldInstancesForDiagonalization, diagonalizationWithFullConfusionMatrix, gold);
+
+    // serialize the model (y and m vectors)
+    try {
+      MultiAnnState sample = predictor.getFinalPredictiveParameters(); // label switching fixed in these params
+      logConfusions("After Diagonalizing ", sample);
+      sample.serializeTo(serializeOut);
+//      serializeOut.close();
+    } catch (IOException e) {
+      System.err.println("unable to serialize variables");
+      e.printStackTrace();
+    }
+    
+    // internally fixes label switching
+    return predictor.predict(heldoutData);
+  }
+
+  // TODO: public for sanity test convenience. Should refactor at some point 
+  public MultiAnnModel buildModel(double[] docWeights){
+
+    // reduce the data, if necessary (e.g., for itemresp)
+    // it's okay that this data may no longer be lined up (order-wise) with external 
+    // data, because we will interpret model predictions by mapping instance identity 
+    // to model index using model.instanceIndices()
+    if (truncateUnannotatedData){
+      builder.setData(Datasets.removeDataWithoutAnnotationsOrObservedLabels(this.data));
+      docWeights = null; // by truncating, we've invalidated any weights we calculated for unannotated items. Reset.
+    }
+    
+    builder.setDocumentWeights(docWeights);
+    MultiAnnModel model = builder.build();
+    
+    // train
+    MultiAnnModelTraining.doOperations(trainingOperations, model);
+
+    // In case it's helpful, record current sampling  
+    // state in the builder so the next model can pick
+    // up where this one left off. This will only make a difference 
+    // when data is being added and the model is being retrained
+    // FIXME (rhaertel): need better method of updating annotations.
+    MultiAnnState sample = model.getCurrentState();
+    builder.setMInitializer(new MaxMarginalInitializer(sample.getM(),data.getInfo().getNumClasses()));
+    builder.setYInitializer(new MaxMarginalInitializer(sample.getY(),data.getInfo().getNumClasses()));
+    
+    // record model
+    model.getCurrentState().longDescription(debugOut);
+    
+    return model;
+  }
+  
+
+
+  private MultiAnnState goldsample = null; // cache gold labels based on sample identity--a minor optimization
+  private int[] gold = null;
+  
+  private void logConfusions(String prefix, MultiAnnState sample){
+    // cache gold labels based on sample identity--a minor optimization
+    if (goldsample==null || goldsample!=sample){
+      gold = Datasets.concealedLabels(sample.getData(), sample.getInstanceIndices());
+    }
+  
+    statsOut.println("");
+    statsOut.println(prefix+" Y Confusion\n"+Matrices.toString(
+        BlockCollapsedMultiAnnModelMath.confusionMatrix(null, gold, sample.getY(), sample.getNumLabels(), data),
+        100,100,0));
+    statsOut.println(prefix+" M Confusion\n"+Matrices.toString(
+        BlockCollapsedMultiAnnModelMath.confusionMatrix(null, gold, sample.getM(), sample.getNumLabels(), data),
+        100,100,0));
+//      statsOut.println("Temp="+temp+" Sample="+s+" Labeled Confusion\n"+Matrices.toString(model.confusionMatrix(true),100,100,0));
+//      statsOut.println("Temp="+temp+" Sample="+s+" Unlabeled Confusion\n"+Matrices.toString(model.confusionMatrix(false),100,100,0));
+    statsOut.println("");
+  }
+  
+}

@@ -1,0 +1,47 @@
+This package contains files related to 
+classification crowdsourcing models.
+
+###########################
+# CollapsedItemResponseModel
+###########################
+Implements gibbs for ItemResp (a special case of 
+the math for multiresp)
+
+###########################
+# BlockCollapsedMultiAnnModel, MeanFieldMultiRespModel
+###########################
+Implement gibbs and meanfield for MultiResp as described in 
+git:/aml/git/nlp-papers/alfa.git/ICML2014
+
+###########################
+# BlockCollapsedMultiAnnModelNeutered 
+###########################
+Implements gibbs for MomResp as described in 
+http://www.lrec-conf.org/proceedings/lrec2014/pdf/1153_Paper.pdf
+
+###########################
+# MeanFieldItemRespModel, MeanFieldMomRespModel, MeanFieldRaykarModel,  
+###########################
+Implement variational for ItemResp, MomResp, and LogResp as described in 
+"On Multinomial vs. Log-linear Crowdsourcing Models with Mean-field Variational Inference"
+presented in a nips 2014 workshop on crowdsourcing.
+
+###########################
+# RaykarModel 
+###########################
+Implements EM for LogResp. 
+For details on the model (NOT inference) see paper 
+"On Multinomial vs. Log-linear Crowdsourcing Models with Mean-field Variational Inference"
+presented in a nips 2014 workshop on crowdsourcing.
+
+###########################
+# ConfusedSLDADiscreteModel 
+###########################
+models documents using topical vectors 
+guided by slda, where the supervised node (y) 
+takes on a discrete value and is not directly 
+observed--only indirectly via annotations a.
+
+For more notes on this model see
+https://drive.google.com/drive/u/0/#folders/0B5phubFg2ZvVSDRvS0U1S3pScjQ/0B5phubFg2ZvVNWtfMEN1b0NMWlk
+ 
