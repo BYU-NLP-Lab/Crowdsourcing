@@ -37,9 +37,9 @@ import edu.byu.nlp.crowdsourcing.gibbs.BlockCollapsedMultiAnnModel.ModelBuilder;
 import edu.byu.nlp.data.types.Dataset;
 import edu.byu.nlp.data.types.DatasetInstance;
 import edu.byu.nlp.data.types.SparseFeatureVector;
+import edu.byu.nlp.data.util.JsonDatasetMocker;
 import edu.byu.nlp.dataset.BasicSparseFeatureVector;
 import edu.byu.nlp.math.GammaFunctions;
-import edu.byu.nlp.pipes.doc.JSONDocumentTest;
 import edu.byu.nlp.util.DoubleArrays;
 import edu.byu.nlp.util.IntArrayCounter;
 import edu.byu.nlp.util.IntArrays;
@@ -288,7 +288,7 @@ public class BlockCollapsedMultiAnnModelTest {
   @Test
   public void testJSONData() throws FileNotFoundException{
     
-    Dataset data = JSONDocumentTest.buildTestDatasetFromJson(JSONDocumentTest.jsonInstances(System.currentTimeMillis()));
+    Dataset data = JsonDatasetMocker.buildTestDatasetFromJson(JsonDatasetMocker.jsonInstances(System.currentTimeMillis()));
     RandomGenerator rnd = new MersenneTwister(1);
     
     ModelBuilder builder = (ModelBuilder) new BlockCollapsedMultiAnnModel.ModelBuilder()

@@ -9,6 +9,7 @@
 	</parent>
 	<artifactId>statnlp-crowdsourcing</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
+	<name>BYU NLP Crowdsourcing Library</name>
 	<build>
 		<sourceDirectory>src</sourceDirectory>
 		<testSourceDirectory>test</testSourceDirectory>

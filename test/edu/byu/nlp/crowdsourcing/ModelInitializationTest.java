@@ -37,8 +37,8 @@ import edu.byu.nlp.crowdsourcing.ModelInitialization.AccuracyInitializer;
 import edu.byu.nlp.crowdsourcing.ModelInitialization.AssignmentInitializer;
 import edu.byu.nlp.crowdsourcing.ModelInitialization.NoisyInitializer;
 import edu.byu.nlp.data.types.Dataset;
+import edu.byu.nlp.data.util.JsonDatasetMocker;
 import edu.byu.nlp.dataset.Datasets;
-import edu.byu.nlp.pipes.doc.JSONDocumentTest;
 import edu.byu.nlp.util.Counter;
 import edu.byu.nlp.util.DenseCounter;
 import edu.byu.nlp.util.Matrices;
@@ -55,7 +55,7 @@ public class ModelInitializationTest {
     RandomGenerator rnd = Mockito.mock(RandomGenerator.class); // always return 0
     AssignmentInitializer init = new ModelInitialization.BaselineInitializer(rnd, false);
 
-    Dataset data = JSONDocumentTest.buildTestDatasetFromJson(jsonInstances(1));
+    Dataset data = JsonDatasetMocker.buildTestDatasetFromJson(jsonInstances(1));
     Map<String,Integer> instanceIndices = Datasets.instanceIndices(data);
     int[] assignments = new int[data.getInfo().getNumDocuments()];
     

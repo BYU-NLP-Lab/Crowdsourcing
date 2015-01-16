@@ -365,13 +365,15 @@ public class RaykarModel {
   }
   
   /**
-   * TODO: is this correct? (how do we estimate class bias (theta) in this model?)
+   * TODO: is there a better way to do this? (how should we estimate class bias (theta) in this model?)
    */
   public static double[] getAnnotatorAccuracies(double[][][] gammas) {
-    double[] accuracies = new double[gammas.length];
+    int num_annotators = gammas.length;
+    int num_classes = gammas[0].length;
+    double[] accuracies = new double[num_annotators];
     for (int j = 0; j < gammas.length; j++) {
       // assume a uniform distribution over classes
-      double[] theta = DoubleArrays.of(1/gammas.length, gammas.length);
+      double[] theta = DoubleArrays.of(1.0/num_classes, num_classes);
       CrowdsourcingUtils.getAccuracy(theta, gammas[j]);
     }
     return accuracies;
