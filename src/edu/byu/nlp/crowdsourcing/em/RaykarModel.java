@@ -170,6 +170,7 @@ public class RaykarModel {
       //////////////////
       // Init (with soft majority vote labels + maxent training)
       //////////////////
+      logger.info("ignoring --training argument. Only EM is supported.");
       logger.info("Initializing EM (training model on majority vote labels)");
       double[][] softlabels = majorityVoteSoftLabels();
       double[][][] gammas = maxGammas(softlabels, a, priors.getNumAnnotators(), data.getInfo().getNumClasses(), priors);

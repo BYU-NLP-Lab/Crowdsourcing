@@ -23,10 +23,10 @@ import edu.byu.nlp.classify.data.DatasetLabeler;
 import edu.byu.nlp.classify.eval.BasicPrediction;
 import edu.byu.nlp.classify.eval.Prediction;
 import edu.byu.nlp.classify.eval.Predictions;
+import edu.byu.nlp.classify.util.ModelTraining;
 import edu.byu.nlp.crowdsourcing.CrowdsourcingUtils;
 import edu.byu.nlp.crowdsourcing.MultiAnnModel;
 import edu.byu.nlp.crowdsourcing.MultiAnnModelBuilders.MultiAnnModelBuilder;
-import edu.byu.nlp.crowdsourcing.MultiAnnModelTraining;
 import edu.byu.nlp.data.types.Dataset;
 import edu.byu.nlp.data.types.DatasetInstance;
 import edu.byu.nlp.util.DoubleArrays;
@@ -55,7 +55,7 @@ public class MeanFieldLabeler implements DatasetLabeler{
     model = modelBuilder.build();
 
     // train
-    MultiAnnModelTraining.doOperations(trainingOperations, model);
+    ModelTraining.doOperations(trainingOperations, model);
     
     MeanFieldMultiAnnState state = (MeanFieldMultiAnnState) model.getCurrentState();
     Dataset data = state.getData();

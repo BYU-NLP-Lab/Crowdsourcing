@@ -23,6 +23,7 @@ import cc.mallet.types.Dirichlet;
 import edu.byu.nlp.crowdsourcing.CrowdsourcingUtils;
 import edu.byu.nlp.crowdsourcing.MultiAnnModel;
 import edu.byu.nlp.crowdsourcing.MultiAnnModelBuilders.AbstractMultiAnnModelBuilder;
+import edu.byu.nlp.crowdsourcing.TrainableMultiAnnModel;
 import edu.byu.nlp.crowdsourcing.MultiAnnState;
 import edu.byu.nlp.crowdsourcing.PriorSpecification;
 import edu.byu.nlp.data.types.Dataset;
@@ -38,7 +39,7 @@ import edu.byu.nlp.util.MatrixAverager;
 /**
  * @author pfelt
  */
-public class MeanFieldItemRespModel implements MeanFieldMultiAnnModel {
+public class MeanFieldItemRespModel extends TrainableMultiAnnModel implements MeanFieldMultiAnnModel {
 
   private static final Logger logger = Logger.getLogger(MeanFieldItemRespModel.class.getName());
 

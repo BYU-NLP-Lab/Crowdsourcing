@@ -36,8 +36,8 @@ import com.google.common.collect.Lists;
 import edu.byu.nlp.classify.eval.BasicPrediction;
 import edu.byu.nlp.classify.eval.Prediction;
 import edu.byu.nlp.classify.eval.Predictions;
-import edu.byu.nlp.classify.util.ModelTrainingOperations;
-import edu.byu.nlp.classify.util.ModelTrainingOperations.SupportsTrainingOperations;
+import edu.byu.nlp.classify.util.ModelTraining;
+import edu.byu.nlp.classify.util.ModelTraining.SupportsTrainingOperations;
 import edu.byu.nlp.crowdsourcing.CrowdsourcingUtils;
 import edu.byu.nlp.crowdsourcing.ModelInitialization.AssignmentInitializer;
 import edu.byu.nlp.crowdsourcing.PriorSpecification;
@@ -305,7 +305,7 @@ public class ConfusedSLDADiscreteModel {
       // train model 
       ////////////////////
       ModelTrainer trainer = new ModelTrainer(state);
-      ModelTrainingOperations.doOperations(trainingOps, trainer);
+      ModelTraining.doOperations(trainingOps, trainer);
 
       logger.info("Training finished with log joint="+unnormalizedLogJoint(state));
       System.out.println("Topic Results");

@@ -22,6 +22,7 @@ import org.fest.util.VisibleForTesting;
 
 import edu.byu.nlp.crowdsourcing.MultiAnnModel;
 import edu.byu.nlp.crowdsourcing.MultiAnnModelBuilders.AbstractMultiAnnModelBuilder;
+import edu.byu.nlp.crowdsourcing.TrainableMultiAnnModel;
 import edu.byu.nlp.crowdsourcing.MultiAnnState;
 import edu.byu.nlp.crowdsourcing.MultiAnnState.CollapsedNeuteredMultiAnnState;
 import edu.byu.nlp.crowdsourcing.PriorSpecification;
@@ -35,9 +36,10 @@ import edu.byu.nlp.util.MatrixAverager;
 
 /**
  * @author rah67
+ * @author plf1
  * 
  */
-public class BlockCollapsedMultiAnnModelNeutered implements MultiAnnModel {
+public class BlockCollapsedMultiAnnModelNeutered extends TrainableMultiAnnModel {
 
   private static final boolean USE_LOG_JOINT_FOR_COEFFS = false;
   

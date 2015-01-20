@@ -22,6 +22,7 @@ import org.fest.util.VisibleForTesting;
 
 import edu.byu.nlp.crowdsourcing.MultiAnnModel;
 import edu.byu.nlp.crowdsourcing.MultiAnnModelBuilders.AbstractMultiAnnModelBuilder;
+import edu.byu.nlp.crowdsourcing.TrainableMultiAnnModel;
 import edu.byu.nlp.crowdsourcing.MultiAnnState;
 import edu.byu.nlp.crowdsourcing.MultiAnnState.CollapsedMultiAnnState;
 import edu.byu.nlp.crowdsourcing.PriorSpecification;
@@ -39,7 +40,7 @@ import edu.byu.nlp.util.MatrixAverager;
  * @author rah67  
  * docWeight
  */
-public class BlockCollapsedMultiAnnModel implements MultiAnnModel {
+public class BlockCollapsedMultiAnnModel extends TrainableMultiAnnModel {
 
   private static final boolean USE_LOG_JOINT_FOR_COEFFS = false;
   
@@ -303,12 +304,10 @@ public class BlockCollapsedMultiAnnModel implements MultiAnnModel {
         logCountOfYAndM, logSumCountOfYAndM, 
         numAnnotators(), numLabels(), data.getInfo().getNumFeatures(), data, priors);
   }
-  
 
   /**
    * sample from y, marginalizing out m
    */
-  @Override
   public void sampleY() {
     currentSample = null; // invalidate cached values
     // enumerate instances
@@ -353,7 +352,6 @@ public class BlockCollapsedMultiAnnModel implements MultiAnnModel {
   /**
    * sample from m, marginalizing out y
    */
-  @Override
   public void sampleM() {
     currentSample = null; // invalidate cached values
     // enumerate instances
@@ -425,7 +423,6 @@ public class BlockCollapsedMultiAnnModel implements MultiAnnModel {
    * 
    * NOTE: this may need mathematical justification.
    */
-  @Override
   public void maximizeM() {
     currentSample = null; // invalidate cached values
     // enumerate instances
@@ -670,6 +667,7 @@ public class BlockCollapsedMultiAnnModel implements MultiAnnModel {
   public Map<String,Integer> getInstanceIndices() {
     return instanceIndices;
   }
+
 
   
 }

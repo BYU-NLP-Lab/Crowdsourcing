@@ -17,29 +17,16 @@ package edu.byu.nlp.crowdsourcing;
 
 import java.util.Map;
 
+import edu.byu.nlp.classify.util.ModelTraining.SupportsTrainingOperations;
 import edu.byu.nlp.util.IntArrayCounter;
 import edu.byu.nlp.util.MatrixAverager;
 
 /**
  * @author pfelt
  */
-public interface MultiAnnModel {
+public interface MultiAnnModel extends SupportsTrainingOperations{
 
-  void setTemp(double temp);
-
-  void sample();
-
-  void sampleY();
-
-  void sampleM();
-  
   MultiAnnState getCurrentState();
-  
-  void maximize();
-  
-  void maximizeY();
-
-  void maximizeM();
   
   Map<String,Integer> getInstanceIndices();
 

@@ -28,9 +28,9 @@ import edu.byu.nlp.util.Indexers;
 
 public enum AnnotatorAccuracySetting {
   GOOD (new double[] { 0.99999, 0.99999, 0.99999, 0.99999, 0.99999 }, 1e100), 
-  NOISY (new double[] { 0.90, 0.85, 0.80, 0.75, 0.70 }, 1e100), 
-  VERY_NOISY (new double[] { 0.70, 0.65, 0.60, 0.55, 0.50 }, 1e100),
-  CROWD (new double[] { 0.50, 0.40, 0.30, 0.20, 0.10 }, 1e100),
+  HIGH (new double[] { 0.90, 0.85, 0.80, 0.75, 0.70 }, 1e100), 
+  MED (new double[] { 0.70, 0.65, 0.60, 0.55, 0.50 }, 1e100),
+  LOW (new double[] { 0.50, 0.40, 0.30, 0.20, 0.10 }, 1e100),
   CONFLICT (new double[] { 0.50, 0.40, 0.30, 0.20, 0.10 }, 0.1);
   // when this is very large, the off-diagonal is uniform
   private final double symmetricDirichletParam;

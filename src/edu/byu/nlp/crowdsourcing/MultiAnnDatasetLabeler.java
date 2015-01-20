@@ -26,6 +26,7 @@ import com.google.common.io.ByteStreams;
 import edu.byu.nlp.classify.data.DatasetBuilder;
 import edu.byu.nlp.classify.data.DatasetLabeler;
 import edu.byu.nlp.classify.eval.Predictions;
+import edu.byu.nlp.classify.util.ModelTraining;
 import edu.byu.nlp.crowdsourcing.ModelInitialization.MaxMarginalInitializer;
 import edu.byu.nlp.crowdsourcing.MultiAnnModelBuilders.MultiAnnModelBuilder;
 import edu.byu.nlp.crowdsourcing.gibbs.BlockCollapsedMultiAnnModelMath;
@@ -238,7 +239,7 @@ public class MultiAnnDatasetLabeler implements DatasetLabeler{
     MultiAnnModel model = builder.build();
     
     // train
-    MultiAnnModelTraining.doOperations(trainingOperations, model);
+    ModelTraining.doOperations(trainingOperations, model);
 
     // In case it's helpful, record current sampling  
     // state in the builder so the next model can pick
