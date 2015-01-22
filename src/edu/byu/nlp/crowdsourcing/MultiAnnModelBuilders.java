@@ -399,11 +399,11 @@ public class MultiAnnModelBuilders {
   }
 
   public static MultiAnnModelBuilder initModelBuilderWithBaselineInit(MultiAnnModelBuilder builder, 
-      PriorSpecification priors, Dataset data, boolean truncateUnlabeledData, RandomGenerator rnd) {
+      PriorSpecification priors, Dataset data, RandomGenerator rnd) {
     AssignmentInitializer initializer = new BaselineInitializer(rnd);
 //    initModelBuilder(builder, priors, data, initializer, rnd);
     AssignmentInitializer mInitializer = new BaselineInitializer(rnd, true);
-//    // note (pfelt): the below doesn't perturbs m settings according to the prior 
+//    // note (pfelt): the below doesn't perturb m settings according to the prior 
 //    AssignmentInitializer mInitializer = new ModelInitialization.NoisyInitializer(new BaselineInitializer(rnd, true), 1-priors.getBMu(), data.getInfo().getNumClasses(), rnd);
 //    AssignmentInitializer mInitializer = new ModelInitialization.UniformAssignmentInitializer(data.getInfo().getNumClasses(), rnd);
     return initModelBuilder(builder, priors, data, initializer, mInitializer, rnd);

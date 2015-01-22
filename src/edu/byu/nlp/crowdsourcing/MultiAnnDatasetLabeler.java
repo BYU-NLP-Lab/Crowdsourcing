@@ -53,7 +53,6 @@ public class MultiAnnDatasetLabeler implements DatasetLabeler{
   private PrintWriter serializeOut;
   private String unannotatedDocumentWeight;
   private RandomGenerator rnd;
-  private boolean truncateUnannotatedData;
   private PrintWriter debugOut;
 
 
@@ -136,7 +135,6 @@ public class MultiAnnDatasetLabeler implements DatasetLabeler{
 		boolean diagonalizationWithFullConfusionMatrix,
 		int goldInstancesForDiagonalization, Dataset trainingData,
 		String unannotatedDocumentWeight,
-		boolean truncateUnannotatedData, 
 		RandomGenerator algRnd) {
     // TODO (pfelt): in the future we'll probably want to NOT pass in the builder, but create a new builder 
     // for every label() request. The only problem with that right now is that it's not clear how
@@ -151,7 +149,6 @@ public class MultiAnnDatasetLabeler implements DatasetLabeler{
     this.serializeOut=(serializeOut==null)? new PrintWriter(ByteStreams.nullOutputStream()): serializeOut;
     this.debugOut=(debugOut==null)? new PrintWriter(ByteStreams.nullOutputStream()): debugOut;
     this.unannotatedDocumentWeight=unannotatedDocumentWeight;
-    this.truncateUnannotatedData=truncateUnannotatedData;
     this.rnd=algRnd;
     
     this.data=trainingData; // should get rid of this after we figure out how to pass instances into the label() method
@@ -225,15 +222,6 @@ public class MultiAnnDatasetLabeler implements DatasetLabeler{
 
   // TODO: public for sanity test convenience. Should refactor at some point 
   public MultiAnnModel buildModel(double[] docWeights){
-
-    // reduce the data, if necessary (e.g., for itemresp)
-    // it's okay that this data may no longer be lined up (order-wise) with external 
-    // data, because we will interpret model predictions by mapping instance identity 
-    // to model index using model.instanceIndices()
-    if (truncateUnannotatedData){
-      builder.setData(Datasets.removeDataWithoutAnnotationsOrObservedLabels(this.data));
-      docWeights = null; // by truncating, we've invalidated any weights we calculated for unannotated items. Reset.
-    }
     
     builder.setDocumentWeights(docWeights);
     MultiAnnModel model = builder.build();
