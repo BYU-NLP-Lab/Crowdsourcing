@@ -61,6 +61,7 @@ import edu.byu.nlp.util.Matrices;
 public class ConfusedSLDADiscreteModel {
   private static final Logger logger = Logger.getLogger(ConfusedSLDADiscreteModel.class.getName());
   private static final boolean DEBUG = true;
+  private static final int DEFAULT_TRAINING_ITERATIONS = 25;
   
   //////////////////////////////////////////////
   // Helper Code
@@ -370,13 +371,16 @@ public class ConfusedSLDADiscreteModel {
         else if (variableName.toLowerCase().equals("b")){
           throw new UnsupportedOperationException("cannot sample b");
         }
+        else{
+          throw new IllegalArgumentException("unknown variable name "+variableName);
+        }
       }
 
       /** {@inheritDoc} */
       @Override
       public void maximize(String variableName, String[] args) {
         Preconditions.checkNotNull(variableName,"training operations must reference a specific variable (e.g., maximize-all, sample-y, etc)");
-        int maxNumIterations = (args.length>=1)? Integer.parseInt(args[0]): 100;
+        int maxNumIterations = (args.length>=1)? Integer.parseInt(args[0]): DEFAULT_TRAINING_ITERATIONS;
         
         // Joint
         if (variableName.equals("all")){
@@ -401,6 +405,9 @@ public class ConfusedSLDADiscreteModel {
         else if (variableName.toLowerCase().equals("b")){
           // maximize log linear model independently 
           maximizeB(state);
+        }
+        else{
+          throw new IllegalArgumentException("unknown variable name "+variableName);
         }
       }
       
