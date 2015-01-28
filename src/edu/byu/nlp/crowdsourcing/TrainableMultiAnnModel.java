@@ -15,7 +15,9 @@
  */
 package edu.byu.nlp.crowdsourcing;
 
-import java.util.logging.Logger;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.google.common.base.Preconditions;
 
@@ -23,8 +25,7 @@ import com.google.common.base.Preconditions;
  * @author pfelt
  */
 public abstract class TrainableMultiAnnModel implements MultiAnnModel {
-  private static final Logger logger = Logger
-      .getLogger(TrainableMultiAnnModel.class.getName());
+  private static final Logger logger = LoggerFactory.getLogger(TrainableMultiAnnModel.class);
 
   public abstract void sample();
 
@@ -132,7 +133,7 @@ public abstract class TrainableMultiAnnModel implements MultiAnnModel {
         // it also can throw spurious warnings when a method is very close to
         // convergence
         if (improvement < 0) { // sanity check
-          logger.warning(getClass().getName() + ": Model got worse ("
+          logger.warn(getClass().getName() + ": Model got worse ("
               + improvement + ") after maximizing. This should never happen.");
         }
         prevJoint = newJoint;

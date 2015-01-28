@@ -14,18 +14,19 @@
 package edu.byu.nlp.crowdsourcing.gibbs;
 
 import java.util.Map;
-import java.util.logging.Logger;
 
 import org.apache.commons.math3.random.RandomGenerator;
 import org.apache.commons.math3.special.Gamma;
 import org.fest.util.VisibleForTesting;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import edu.byu.nlp.crowdsourcing.MultiAnnModel;
 import edu.byu.nlp.crowdsourcing.MultiAnnModelBuilders.AbstractMultiAnnModelBuilder;
-import edu.byu.nlp.crowdsourcing.TrainableMultiAnnModel;
 import edu.byu.nlp.crowdsourcing.MultiAnnState;
 import edu.byu.nlp.crowdsourcing.MultiAnnState.CollapsedMultiAnnState;
 import edu.byu.nlp.crowdsourcing.PriorSpecification;
+import edu.byu.nlp.crowdsourcing.TrainableMultiAnnModel;
 import edu.byu.nlp.data.types.Dataset;
 import edu.byu.nlp.data.types.DatasetInstance;
 import edu.byu.nlp.data.types.SparseFeatureVector;
@@ -43,9 +44,8 @@ import edu.byu.nlp.util.MatrixAverager;
 public class BlockCollapsedMultiAnnModel extends TrainableMultiAnnModel {
 
   private static final boolean USE_LOG_JOINT_FOR_COEFFS = false;
-  
-  private static final Logger logger = Logger
-      .getLogger(BlockCollapsedMultiAnnModel.class.getName());
+
+  private static final Logger logger = LoggerFactory.getLogger(BlockCollapsedMultiAnnModel.class);
 
   private final PriorSpecification priors;
 

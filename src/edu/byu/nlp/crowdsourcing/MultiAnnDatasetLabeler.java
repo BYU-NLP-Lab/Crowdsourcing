@@ -17,9 +17,10 @@ package edu.byu.nlp.crowdsourcing;
 
 import java.io.IOException;
 import java.io.PrintWriter;
-import java.util.logging.Logger;
 
 import org.apache.commons.math3.random.RandomGenerator;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.google.common.io.ByteStreams;
 
@@ -40,7 +41,7 @@ import edu.byu.nlp.util.Matrices;
  * @author pfelt
  */
 public class MultiAnnDatasetLabeler implements DatasetLabeler{
-  private static final Logger logger = Logger.getLogger(MultiAnnDatasetLabeler.class.getName());
+  private static final Logger logger = LoggerFactory.getLogger(ModelTraining.class);
 
   private Dataset data;
   private MultiAnnModelBuilder builder;

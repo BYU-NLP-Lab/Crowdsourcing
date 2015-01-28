@@ -15,9 +15,10 @@ package edu.byu.nlp.crowdsourcing.meanfield;
 
 import java.util.ArrayList;
 import java.util.Map;
-import java.util.logging.Logger;
 
 import org.apache.commons.math3.random.RandomGenerator;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import cc.mallet.classify.MaxEnt;
 import cc.mallet.types.Dirichlet;
@@ -27,10 +28,10 @@ import com.google.common.collect.Lists;
 import edu.byu.nlp.classify.MalletMaxentTrainer;
 import edu.byu.nlp.crowdsourcing.CrowdsourcingUtils;
 import edu.byu.nlp.crowdsourcing.MultiAnnModel;
-import edu.byu.nlp.crowdsourcing.TrainableMultiAnnModel;
 import edu.byu.nlp.crowdsourcing.MultiAnnModelBuilders.AbstractMultiAnnModelBuilder;
 import edu.byu.nlp.crowdsourcing.MultiAnnState;
 import edu.byu.nlp.crowdsourcing.PriorSpecification;
+import edu.byu.nlp.crowdsourcing.TrainableMultiAnnModel;
 import edu.byu.nlp.data.types.Dataset;
 import edu.byu.nlp.data.types.DatasetInstance;
 import edu.byu.nlp.data.types.SparseFeatureVector.EntryVisitor;
@@ -45,7 +46,7 @@ import edu.byu.nlp.util.MatrixAverager;
  */
 public class MeanFieldRaykarModel extends TrainableMultiAnnModel implements MeanFieldMultiAnnModel {
 
-  private static final Logger logger = Logger.getLogger(MeanFieldRaykarModel.class.getName());
+  private static final Logger logger = LoggerFactory.getLogger(MeanFieldRaykarModel.class);
 
   private static double INITIALIZATION_SMOOTHING = 1e-6; 
   
@@ -338,33 +339,33 @@ public class MeanFieldRaykarModel extends TrainableMultiAnnModel implements Mean
   /** {@inheritDoc} */
   @Override
   public void maximizeY() {
-    logger.warning("maximizeY() defaults to maximize() for variational models.");
+    logger.warn("maximizeY() defaults to maximize() for variational models.");
     maximize();
   }
 
   /** {@inheritDoc} */
   @Override
   public void maximizeM() {
-    logger.warning("maximizeM() defaults to maximize() for variational models.");
+    logger.warn("maximizeM() defaults to maximize() for variational models.");
     maximize();
   }
 
   /** {@inheritDoc} */
   @Override
   public void sample() {
-    logger.warning("Sampling not available for variational model. Ignoring...");
+    logger.warn("Sampling not available for variational model. Ignoring...");
   }
 
   /** {@inheritDoc} */
   @Override
   public void sampleY() {
-    logger.warning("Sampling not available for variational model. Ignoring...");
+    logger.warn("Sampling not available for variational model. Ignoring...");
   }
 
   /** {@inheritDoc} */
   @Override
   public void sampleM() {
-    logger.warning("Sampling not available for variational model. Ignoring...");
+    logger.warn("Sampling not available for variational model. Ignoring...");
   }
 
 

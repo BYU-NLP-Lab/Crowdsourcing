@@ -14,7 +14,6 @@
 package edu.byu.nlp.crowdsourcing.gibbs;
 
 import java.util.Map;
-import java.util.logging.Logger;
 
 import org.apache.commons.math3.random.RandomGenerator;
 import org.apache.commons.math3.special.Gamma;
@@ -22,10 +21,10 @@ import org.fest.util.VisibleForTesting;
 
 import edu.byu.nlp.crowdsourcing.MultiAnnModel;
 import edu.byu.nlp.crowdsourcing.MultiAnnModelBuilders.AbstractMultiAnnModelBuilder;
-import edu.byu.nlp.crowdsourcing.TrainableMultiAnnModel;
 import edu.byu.nlp.crowdsourcing.MultiAnnState;
 import edu.byu.nlp.crowdsourcing.MultiAnnState.CollapsedItemResponseState;
 import edu.byu.nlp.crowdsourcing.PriorSpecification;
+import edu.byu.nlp.crowdsourcing.TrainableMultiAnnModel;
 import edu.byu.nlp.data.types.Dataset;
 import edu.byu.nlp.data.types.DatasetInstance;
 import edu.byu.nlp.data.types.SparseFeatureVector;
@@ -41,9 +40,8 @@ import edu.byu.nlp.util.MatrixAverager;
 public class CollapsedItemResponseModel extends TrainableMultiAnnModel {
 
   private static final boolean USE_LOG_JOINT_FOR_COEFFS = false;
-  
-  private static final Logger logger = Logger
-      .getLogger(CollapsedItemResponseModel.class.getName());
+
+//  private static final Logger logger = LoggerFactory.getLogger(CollapsedItemResponseModel.class);
 
   private final PriorSpecification priors;
 

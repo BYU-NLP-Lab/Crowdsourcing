@@ -16,9 +16,10 @@ package edu.byu.nlp.crowdsourcing.gibbs;
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.Map;
-import java.util.logging.Logger;
 
 import org.fest.util.VisibleForTesting;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.google.common.base.Preconditions;
 
@@ -28,6 +29,7 @@ import edu.byu.nlp.crowdsourcing.CrowdsourcingUtils;
 import edu.byu.nlp.crowdsourcing.MultiAnnState;
 import edu.byu.nlp.crowdsourcing.MultiAnnState.BasicMultiAnnState;
 import edu.byu.nlp.crowdsourcing.PriorSpecification;
+import edu.byu.nlp.crowdsourcing.TrainableMultiAnnModel;
 import edu.byu.nlp.data.types.Dataset;
 import edu.byu.nlp.data.types.DatasetInstance;
 import edu.byu.nlp.data.types.SparseFeatureVector;
@@ -43,10 +45,11 @@ import edu.byu.nlp.util.Matrices;
 
 /**
  * @author rah67
+ * @author plf1
  * 
  */
 public class BlockCollapsedMultiAnnModelMath {
-  private static final Logger logger = Logger.getLogger(BlockCollapsedMultiAnnModelMath.class.getName());
+  private static final Logger logger = LoggerFactory.getLogger(TrainableMultiAnnModel.class);
   
   /*
    * public int docIndexFor(FlatInstance<SparseFeatureVector, Integer> instance) {
@@ -67,7 +70,7 @@ public class BlockCollapsedMultiAnnModelMath {
       double[][] logCountOfYAndM, double[] logSumCountOfYAndM, 
       int numAnnotators, int numLabels, int numFeatures, Dataset data, PriorSpecification priors) {
     if (data==null || priors==null){
-      logger.warning("Ignoring the hasCorrectCounts assertion because priors and/or data have not been set");
+      logger.warn("Ignoring the hasCorrectCounts assertion because priors and/or data have not been set");
       return true;
     }
     double[] logCountOfYSanity = DoubleArrays.of(priors.getBTheta(), numLabels);
@@ -304,7 +307,7 @@ public class BlockCollapsedMultiAnnModelMath {
       for (int i=0; i<mMap.length; i++){
         mMap[i] = i;
       }
-      logger.warning("unable to diagonalize m, returning the identity mapping. "
+      logger.warn("unable to diagonalize m, returning the identity mapping. "
           + "If this is itemresp or momresp, then this is fine. "
           + "If this is multiann, then there is a serious problem.");
     }

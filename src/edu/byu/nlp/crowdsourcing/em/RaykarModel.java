@@ -16,7 +16,9 @@
 package edu.byu.nlp.crowdsourcing.em;
 
 import java.util.List;
-import java.util.logging.Logger;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import cc.mallet.classify.MaxEnt;
 import cc.mallet.classify.MaxEntTrainer;
@@ -49,8 +51,7 @@ import edu.byu.nlp.util.Matrices;
  */
 public class RaykarModel {
 
-  private static final Logger logger = Logger
-      .getLogger(RaykarModel.class.getName());
+  private static final Logger logger = LoggerFactory.getLogger(RaykarModel.class);
   
   private MaxEnt maxent;
   private double[][][] gammas;

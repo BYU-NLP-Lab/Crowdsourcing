@@ -17,16 +17,18 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.List;
-import java.util.logging.Logger;
 
 import org.apache.commons.math3.random.MersenneTwister;
 import org.apache.commons.math3.random.RandomGenerator;
 import org.apache.commons.vfs2.FileSystemException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.google.common.base.Function;
 
 import edu.byu.nlp.classify.NaiveBayesClassifier;
 import edu.byu.nlp.classify.NaiveBayesLearner;
+import edu.byu.nlp.crowdsourcing.TrainableMultiAnnModel;
 import edu.byu.nlp.data.docs.CountCutoffFeatureSelectorFactory;
 import edu.byu.nlp.data.docs.DocumentDatasetBuilder;
 import edu.byu.nlp.data.docs.TokenizerPipes;
@@ -43,7 +45,7 @@ import edu.byu.nlp.util.jargparser.annotations.Option;
  */
 public class Baseline {
 
-  private static Logger logger = Logger.getLogger(Baseline.class.getName());
+  private static final Logger logger = LoggerFactory.getLogger(TrainableMultiAnnModel.class);
 
   @Option(help = "base directory of the documents")
   private static String basedir = "20_newsgroups";

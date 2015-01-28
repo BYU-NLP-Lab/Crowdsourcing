@@ -17,9 +17,10 @@ package edu.byu.nlp.crowdsourcing.em;
 
 import java.util.List;
 import java.util.Map;
-import java.util.logging.Logger;
 
 import org.apache.commons.math3.random.RandomGenerator;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import cc.mallet.classify.MaxEnt;
 import cc.mallet.classify.MaxEntTrainer;
@@ -59,7 +60,7 @@ import edu.byu.nlp.util.Matrices;
  * https://drive.google.com/drive/u/0/#folders/0B5phubFg2ZvVSDRvS0U1S3pScjQ/0B5phubFg2ZvVNWtfMEN1b0NMWlk
  */
 public class ConfusedSLDADiscreteModel {
-  private static final Logger logger = Logger.getLogger(ConfusedSLDADiscreteModel.class.getName());
+  private static final Logger logger = LoggerFactory.getLogger(ConfusedSLDADiscreteModel.class);
   private static final boolean DEBUG = true;
   private static final int DEFAULT_TRAINING_ITERATIONS = 25;
   
@@ -309,8 +310,8 @@ public class ConfusedSLDADiscreteModel {
       ModelTraining.doOperations(trainingOps, trainer);
 
       logger.info("Training finished with log joint="+unnormalizedLogJoint(state));
-      System.out.println("Topic Results");
-      printTopNWordsPerTopic(state, 10);
+      logger.debug("Topic Results");
+      logTopNWordsPerTopic(state, 10);
       
       return model;
       
@@ -387,7 +388,7 @@ public class ConfusedSLDADiscreteModel {
           // maximize topics and class labels jointly (SLOW)
           state.includeMetadataSupervision = true;
           maximizeUntilConvergence(state, 0, 0, maxNumIterations); 
-          printTopNWordsPerTopic(state, 10);
+          logTopNWordsPerTopic(state, 10);
         }
         // Y
         else if (variableName.toLowerCase().equals("y")){ 
@@ -920,12 +921,12 @@ public class ConfusedSLDADiscreteModel {
   }
 
   // Code to print top n words for topics
-  public static void printTopNWordsPerTopic(State s, int n){
+  public static void logTopNWordsPerTopic(State s, int n){
     int topic = 0;
     for (double[] vocab: s.perTopicCountOfVocab){
-      System.out.println("Top "+n+" words for topic "+topic+":");
+      logger.debug("Top "+n+" words for topic "+topic+":");
       for (int topIndex: DoubleArrays.argMaxList(n, vocab)){
-        System.out.println("\t"+s.data.getInfo().getFeatureIndexer().get(topIndex)+"="+vocab[topIndex]);
+        logger.debug("\t"+s.data.getInfo().getFeatureIndexer().get(topIndex)+"="+vocab[topIndex]);
       }
       topic++;
     }
