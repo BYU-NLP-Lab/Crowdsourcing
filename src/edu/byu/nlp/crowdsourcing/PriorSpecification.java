@@ -18,12 +18,12 @@ package edu.byu.nlp.crowdsourcing;
 import com.google.common.base.Preconditions;
 
 public class PriorSpecification {
-  private final double bTheta;
+  private double bTheta;
   private final double bMu;
   private final double cMu;
   private final double[] bAlpha;
   private final double cAlpha;
-  private final double bPhi;
+  private double bPhi;
 
   public PriorSpecification(double bTheta, double bMu, double cMu, double[] bAlpha, double cAlpha, double bPhi) {
     Preconditions.checkArgument(bTheta > 0.0);
@@ -47,6 +47,10 @@ public class PriorSpecification {
   public double getBTheta() {
     return bTheta;
   }
+  
+  public void setBTheta(double bTheta){
+    this.bTheta=bTheta;
+  }
 
   public double getBMu() {
     return bMu;
@@ -66,6 +70,10 @@ public class PriorSpecification {
 
   public double getBPhi() {
     return bPhi;
+  }
+  
+  public void setBPhi(double bPhi){
+    this.bPhi=bPhi;
   }
 
   public int getNumAnnotators() {

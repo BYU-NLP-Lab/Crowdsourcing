@@ -47,7 +47,12 @@ import edu.byu.nlp.data.types.Dataset;
 import edu.byu.nlp.data.types.DatasetInstance;
 import edu.byu.nlp.dataset.Datasets;
 import edu.byu.nlp.math.GammaFunctions;
+import edu.byu.nlp.math.optimize.ConvergenceCheckers;
+import edu.byu.nlp.math.optimize.IterativeOptimizer;
+import edu.byu.nlp.math.optimize.IterativeOptimizer.ReturnType;
+import edu.byu.nlp.math.optimize.ValueAndObject;
 import edu.byu.nlp.stats.RandomGenerators;
+import edu.byu.nlp.stats.SymmetricDirichletMultinomialMLEOptimizable;
 import edu.byu.nlp.util.DoubleArrays;
 import edu.byu.nlp.util.IntArrays;
 import edu.byu.nlp.util.Integers;
@@ -340,6 +345,7 @@ public class ConfusedSLDADiscreteModel {
             sampleY(state, rnd);
             logger.info("sampling topic matrix z");
             sampleZ(state, rnd);
+            updateBTheta(state); // hyperparameter optimization after changing z
             if (DEBUG){
               logger.info("sample Y+Z+B iteration "+i+" with (unnormalized) log joint "+unnormalizedLogJoint(state));
             }
@@ -362,6 +368,7 @@ public class ConfusedSLDADiscreteModel {
           state.includeMetadataSupervision = false;
           for (int i=0; i<numIterations; i++){
             sampleZ(state, rnd);
+            updateBTheta(state); // hyperparameter optimization after changing z
             if (DEBUG){
               logger.info("sample Z iteration "+i+" with (unnormalized) log joint "+unnormalizedLogJoint(state));
             }
@@ -401,6 +408,8 @@ public class ConfusedSLDADiscreteModel {
           // maximize topics independently (FAST)
           state.includeMetadataSupervision = false;
           maximizeZUntilConvergence(state, 0, maxNumIterations);
+          updateBTheta(state); // hyperparameter optimization after changing z
+          updateBPhi(state); // hyperparameter optimization after changing z
         }
         // B
         else if (variableName.toLowerCase().equals("b")){
@@ -539,6 +548,8 @@ public class ConfusedSLDADiscreteModel {
       maximizeB(s); // set maxent model weights
       logger.info("maximizing topic assignments Z");
       numZChanges = maximizeZ(s); // set topic assignments
+      updateBTheta(s); // hyperparameter optimization after changing z
+      updateBPhi(s); // hyperparameter optimization after changing z
       logger.info("maximizing inferred labels Y");
       numYChanges = maximizeY(s); // set inferred label values
       logger.info("maximization iteration "+iterations+" with "+numYChanges+" Y changes and "+numZChanges+" Z changes with (unnormalized) joint "+unnormalizedLogJoint(s));
@@ -548,7 +559,8 @@ public class ConfusedSLDADiscreteModel {
   }
 
   
-  
+
+
   public Predictions predict(Dataset trainingInstances, Dataset heldoutInstances, RandomGenerator rnd){
     // em-derived labels
     List<Prediction> labeledPredictions = Lists.newArrayList();
@@ -933,4 +945,40 @@ public class ConfusedSLDADiscreteModel {
   }
 
   
+
+
+  /////////////////////////////////////////////////
+  // Hyperparameter learning  
+  /////////////////////////////////////////////////
+  private static double HYPERPARAM_LEARNING_CONVERGENCE_THRESHOLD = 0.1;
+  private static void updateBTheta(State s) {
+    logger.info("optimizing btheta in light of most recent topic assignments");
+    double oldValue = s.priors.getBTheta();
+    IterativeOptimizer optimizer = new IterativeOptimizer(ConvergenceCheckers.relativePercentChange(HYPERPARAM_LEARNING_CONVERGENCE_THRESHOLD));
+    SymmetricDirichletMultinomialMLEOptimizable o = SymmetricDirichletMultinomialMLEOptimizable.newOptimizable(s.perDocumentCountOfTopic);
+    ValueAndObject<Double> optimum = optimizer.optimize(o, ReturnType.HIGHEST, true, oldValue);
+    s.priors.setBTheta(optimum.getObject());
+    logger.info("new btheta="+s.priors.getBTheta()+" old btheta="+oldValue);
+  }
+
+  private static void updateBPhi(State s) {
+    logger.info("optimizing bphi in light of most recent topic assignments");
+    double oldValue = s.priors.getBPhi();
+    IterativeOptimizer optimizer = new IterativeOptimizer(ConvergenceCheckers.relativePercentChange(HYPERPARAM_LEARNING_CONVERGENCE_THRESHOLD));
+    SymmetricDirichletMultinomialMLEOptimizable o = SymmetricDirichletMultinomialMLEOptimizable.newOptimizable(s.perTopicCountOfVocab);
+    ValueAndObject<Double> optimum = optimizer.optimize(o, ReturnType.HIGHEST, true, oldValue);
+    s.priors.setBPhi(optimum.getObject());
+    logger.info("new bphi="+s.priors.getBPhi()+" old bphi="+oldValue);
+  }
+
+//  private static void updateBGamma(State s) {
+//    logger.info("optimizing bphi in light of most recent topic assignments");
+//    double oldValue = s.priors.getBPhi();
+//    IterativeOptimizer optimizer = new IterativeOptimizer(ConvergenceCheckers.relativePercentChange(1e-10));
+//    s.per
+//    SymmetricDirichletMultinomialMLEOptimizable o = SymmetricDirichletMultinomialMLEOptimizable.newOptimizable(s.);
+//    ValueAndObject<Double> optimum = optimizer.optimize(o, ReturnType.HIGHEST, true, oldValue);
+//    s.priors.setBPhi(optimum.getObject());
+//    logger.info("new bphi="+s.priors.getBPhi()+" old bphi="+oldValue);
+//  }
 }
