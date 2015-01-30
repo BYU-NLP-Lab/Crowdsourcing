@@ -118,8 +118,10 @@ public class ConfusedSLDADiscreteModel {
     // buffers (instantiated just once for a small efficiency gain)
     private final double[] zCoeffs; // stores topic probabilities while sampling a z
     private final double[] logisticClassScores; // stores class probabilities while sampling a z 
+    private double[] cachedMetadataScores; // stores topic scores for a document d while sampling the words in that doc 
     private final double[] yCoeffs; // stores class probabilities while sampling a y
     private Map<String, Integer> instanceIndices;
+
     
     public State(Dataset data, PriorSpecification priors, int numTopics){
       this.data=data;
@@ -149,6 +151,7 @@ public class ConfusedSLDADiscreteModel {
       // allocate buffers
       this.zCoeffs = new double[numTopics];
       this.logisticClassScores = new double[numClasses];
+      this.cachedMetadataScores = new double[numTopics];
       this.yCoeffs = new double[numClasses];
     }
 
@@ -529,8 +532,14 @@ public class ConfusedSLDADiscreteModel {
       Instance inst = new cc.mallet.types.Instance(fv, target, name, source);
       return inst;
     }
-    
+
     public static double[] zbar(double[] topicCounts, double docSize, double priorBias){
+      double[] zbar = DoubleArrays.subtract(topicCounts, priorBias); // remove bias of priors added to counts
+      DoubleArrays.divideToSelf(topicCounts, docSize); // account for word removed
+      return DoubleArrays.extend(zbar, 1);
+    }
+    
+    public static double[] zbarold(double[] topicCounts, double docSize, double priorBias){
       double[] zbar = DoubleArrays.subtract(topicCounts, priorBias); // remove bias of priors added to counts
       DoubleArrays.divideToSelf(topicCounts, docSize+1); // account for word removed
       return DoubleArrays.extend(zbar, 1);
@@ -569,6 +578,7 @@ public class ConfusedSLDADiscreteModel {
       }
       return maxLambda;
     }
+
   }
   
   
@@ -755,6 +765,23 @@ public class ConfusedSLDADiscreteModel {
   public static int updateZDoc(State s, int doc, RandomGenerator rnd){
     int numChanges = 0;
     int docsize = s.docSizes[doc];
+    int documentClass = s.y[doc];
+    
+    // precompute and cache metadata scores for each topic 
+    // (they are invariant wrt words)
+    for (int t=0; t<s.numTopics; t++){
+      double numerator = Math.exp(MalletInterface.getParameter(documentClass,t,s)/(s.docSizes[doc]));
+      // extend zbar with a bias term on the end always set to 1 (see MalletInterface.getParameters())
+      double[] zzbar = MalletInterface.zbar(s.perDocumentCountOfTopic[doc], s.docSizes[doc], s.priors.getBTheta()); 
+      double denominator = 0;
+      for (int c=0; c<s.numClasses; c++){
+        double dotprod = (MalletInterface.getParameter(c,t,s)/s.docSizes[doc]) + DoubleArrays.dotProduct(MalletInterface.getParameters(c,s),zzbar);
+        denominator += Math.exp(dotprod / s.docSizes[doc]); 
+      }
+      
+      s.cachedMetadataScores[t] = numerator/denominator;
+    }
+    
     for (int word=0; word<docsize; word++){
       numChanges += updateZDocWord(s, doc, word, rnd);
     }
@@ -808,10 +835,10 @@ public class ConfusedSLDADiscreteModel {
         // TODO: when it's there, manually decr then incr s.perDocumentCountOfTopic for each topic
         double numerator = Math.exp(MalletInterface.getParameter(documentClass,t,s)/(s.docSizes[doc]+1));
         // extend zbar with a bias term on the end always set to 1 (see MalletInterface.getParameters())
-        double[] zzbar = MalletInterface.zbar(s.perDocumentCountOfTopic[doc], s.docSizes[doc], s.priors.getBTheta()); 
+        double[] zzbar = MalletInterface.zbarold(s.perDocumentCountOfTopic[doc], s.docSizes[doc], s.priors.getBTheta()); 
         double denominator = 0;
         for (int c=0; c<s.numClasses; c++){
-          double dotprod = MalletInterface.getParameter(c,t,s)/(s.docSizes[doc]+1) + DoubleArrays.dotProduct(MalletInterface.getParameters(c,s),zzbar);
+          double dotprod = (MalletInterface.getParameter(c,t,s)/(s.docSizes[doc]+1)) + DoubleArrays.dotProduct(MalletInterface.getParameters(c,s),zzbar);
           denominator += Math.exp(dotprod / s.docSizes[doc]); 
         }
         optimizedMetadataTopicContribution[t] = numerator/denominator;
@@ -822,7 +849,10 @@ public class ConfusedSLDADiscreteModel {
     // TODO: remove
     DoubleArrays.normalizeToSelf(slowMetadataTopicContribution);
     DoubleArrays.normalizeToSelf(optimizedMetadataTopicContribution);
+    double[] newOPtimizedCheck = s.cachedMetadataScores.clone();
+    DoubleArrays.normalizeToSelf(newOPtimizedCheck);
     Preconditions.checkState(DoubleArrays.equals(slowMetadataTopicContribution, optimizedMetadataTopicContribution, 1e-2));
+    Preconditions.checkState(DoubleArrays.equals(optimizedMetadataTopicContribution, newOPtimizedCheck, 1e-2));
     
     // sample (or maximize) a new topic
     int oldTopic = s.z[doc][word];
