@@ -33,6 +33,7 @@ import cc.mallet.types.LabelAlphabet;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
+import com.google.common.primitives.Doubles;
 
 import edu.byu.nlp.classify.eval.BasicPrediction;
 import edu.byu.nlp.classify.eval.Prediction;
@@ -185,6 +186,10 @@ public class ConfusedSLDADiscreteModel {
             this.perAnnotatorCountOfYAndA[j][classLabel][k] += numAnnotations;
           }
         }
+        
+        // sanity check
+        Preconditions.checkState(DoubleArrays.sum(this.perDocumentCountOfTopic[d])==this.docSizes[d], 
+            "total number of topics in a document ("+DoubleArrays.sum(perDocumentCountOfTopic[d])+") should equal docsize ("+docSizes[d]+")");
         
       } // end for doc
     }
@@ -524,6 +529,46 @@ public class ConfusedSLDADiscreteModel {
       Instance inst = new cc.mallet.types.Instance(fv, target, name, source);
       return inst;
     }
+    
+    public static double[] zbar(double[] topicCounts, double docSize, double priorBias){
+      double[] zbar = DoubleArrays.subtract(topicCounts, priorBias); // remove bias of priors added to counts
+      DoubleArrays.divideToSelf(topicCounts, docSize+1); // account for word removed
+      return DoubleArrays.extend(zbar, 1);
+    }
+
+    public static double getParameter(int documentClass, int topic, State s) {
+      int rowPos = documentClass*(s.numTopics+1);
+      int pos = rowPos + topic;
+      return s.maxent.getParameters()[pos];
+    }
+
+    /**
+     * Get the weights w from the underlying log-linear model for a given class as a double[topic].
+     * The final entry of each row (i.e., w[class][numTopics]) is the class bias weight.
+     * 
+     * Note that topics are playing the role of features here
+     */
+    public static double[] getParameters(int documentClass, State s) {
+      int length = s.numTopics+1;
+      double[] parameters = new double[length];
+      int srcPos = documentClass*(length);
+      System.arraycopy(s.maxent.getParameters(), srcPos, parameters, 0, parameters.length);
+      return parameters;
+    }
+    
+    /**
+     * Get the weights w from the underlying log-linear model as a double[class][feature].
+     * The final entry of each row (i.e., w[class][numFeatures]) is the class bias weight.
+     */
+    public static double[][] getParameterMatrix(State s){
+      Preconditions.checkState(s.maxent.getNumParameters()==s.numClasses*s.numTopics+s.numClasses);
+      Preconditions.checkState(s.maxent.getDefaultFeatureIndex()==s.numTopics);
+      double[][] maxLambda = new double[s.numClasses][]; // +1 accounts for class bias term
+      for (int k=0; k<s.numClasses; k++){
+        maxLambda[k] = getParameters(k, s);
+      }
+      return maxLambda;
+    }
   }
   
   
@@ -729,6 +774,8 @@ public class ConfusedSLDADiscreteModel {
     int wordType = s.documents[doc][word];
     int documentClass = s.y[doc];
 
+    double[] optimizedMetadataTopicContribution = new double[s.numTopics]; // TODO: move this
+    double[] slowMetadataTopicContribution = new double[s.numTopics]; // TODO: delete this
     // populate unnormalized probability vector and then sample
     for (int t=0; t<s.numTopics; t++){
       
@@ -754,10 +801,28 @@ public class ConfusedSLDADiscreteModel {
         Instance zbar = MalletInterface.instanceForTopicCounts(s.perDocumentCountOfTopic[doc], t, s.docSizes[doc], s.priors.getBTheta(), null);
         s.maxent.getClassificationScores(zbar, s.logisticClassScores);
         s.zCoeffs[t] *= s.logisticClassScores[documentClass];
+        slowMetadataTopicContribution[t] = s.logisticClassScores[documentClass];
+        
+        // optimized version
+        // TODO: cache this at the document level 
+        // TODO: when it's there, manually decr then incr s.perDocumentCountOfTopic for each topic
+        double numerator = Math.exp(MalletInterface.getParameter(documentClass,t,s)/(s.docSizes[doc]+1));
+        // extend zbar with a bias term on the end always set to 1 (see MalletInterface.getParameters())
+        double[] zzbar = MalletInterface.zbar(s.perDocumentCountOfTopic[doc], s.docSizes[doc], s.priors.getBTheta()); 
+        double denominator = 0;
+        for (int c=0; c<s.numClasses; c++){
+          double dotprod = MalletInterface.getParameter(c,t,s)/(s.docSizes[doc]+1) + DoubleArrays.dotProduct(MalletInterface.getParameters(c,s),zzbar);
+          denominator += Math.exp(dotprod / s.docSizes[doc]); 
+        }
+        optimizedMetadataTopicContribution[t] = numerator/denominator;
       }
       
       assert DoubleArrays.min(s.logisticClassScores)>=0;
     }
+    // TODO: remove
+    DoubleArrays.normalizeToSelf(slowMetadataTopicContribution);
+    DoubleArrays.normalizeToSelf(optimizedMetadataTopicContribution);
+    Preconditions.checkState(DoubleArrays.equals(slowMetadataTopicContribution, optimizedMetadataTopicContribution, 1e-2));
     
     // sample (or maximize) a new topic
     int oldTopic = s.z[doc][word];
