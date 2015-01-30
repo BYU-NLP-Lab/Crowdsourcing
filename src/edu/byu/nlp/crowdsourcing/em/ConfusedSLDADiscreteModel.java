@@ -363,7 +363,6 @@ public class ConfusedSLDADiscreteModel {
             sampleY(state, rnd);
             logger.info("sampling topic matrix z");
             sampleZ(state, rnd);
-            updateBTheta(state); // hyperparameter optimization after changing z
             if (DEBUG){
               logger.info("sample Y+Z+B iteration "+i+" with (unnormalized) log joint "+unnormalizedLogJoint(state));
             }
@@ -386,7 +385,6 @@ public class ConfusedSLDADiscreteModel {
           state.includeMetadataSupervision = false;
           for (int i=0; i<numIterations; i++){
             sampleZ(state, rnd);
-            updateBTheta(state); // hyperparameter optimization after changing z
             if (DEBUG){
               logger.info("sample Z iteration "+i+" with (unnormalized) log joint "+unnormalizedLogJoint(state));
             }
@@ -426,8 +424,6 @@ public class ConfusedSLDADiscreteModel {
           // maximize topics independently (FAST)
           state.includeMetadataSupervision = false;
           maximizeZUntilConvergence(state, 0, maxNumIterations);
-          updateBTheta(state); // hyperparameter optimization after changing z
-          updateBPhi(state); // hyperparameter optimization after changing z
         }
         // B
         else if (variableName.toLowerCase().equals("b")){
@@ -564,7 +560,7 @@ public class ConfusedSLDADiscreteModel {
     /**
      * Get the weights w from the underlying log-linear model for a given class as a double[topic].
      * The final entry of each row (i.e., w[class][numTopics]) is the class bias weight.
-     * 
+     * b
      * Note that topics are playing the role of features here
      */
     public static double[] getParameters(int documentClass, State s) {
@@ -613,8 +609,6 @@ public class ConfusedSLDADiscreteModel {
       maximizeB(s); // set maxent model weights
       logger.info("maximizing topic assignments Z");
       numZChanges = maximizeZ(s); // set topic assignments
-      updateBTheta(s); // hyperparameter optimization after changing z
-      updateBPhi(s); // hyperparameter optimization after changing z
       logger.info("maximizing inferred labels Y");
       numYChanges = maximizeY(s); // set inferred label values
       logger.info("maximization iteration "+iterations+" with "+numYChanges+" Y changes and "+numZChanges+" Z changes with (unnormalized) joint "+unnormalizedLogJoint(s));
@@ -792,9 +786,15 @@ public class ConfusedSLDADiscreteModel {
       s.cachedMetadataScores[t] = numerator/denominator;
     }
     
+    // do update
     for (int word=0; word<docsize; word++){
       numChanges += updateZDocWord(s, doc, word, rnd);
     }
+    
+    // do inline hyperparameter optimization after z changes
+    updateBTheta(s);
+    updateBPhi(s);
+    
     return numChanges;
   }
 
