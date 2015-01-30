@@ -84,7 +84,7 @@ public class ConfusedSLDADiscreteModel {
     
     private Dataset data;
     private PriorSpecification priors;
-    private double[][][] deltas; // a function of the priors object
+    private double[][][] deltas; // prior over gamma (a function of the priors object)
     private int numTopics; // T: num topics. 
     private int numClasses; // K: num classes. (Derived from data)
     private int numDocuments; // D: num documents. (Derived from data)
@@ -216,7 +216,7 @@ public class ConfusedSLDADiscreteModel {
         }
       }
     }
-    
+
 
     public State clone(){
       State other = new State(data, priors, numTopics);
@@ -240,6 +240,20 @@ public class ConfusedSLDADiscreteModel {
       // ignore buffers
       return other;
     }
+  }
+
+  private static void addPriorsToCounts(State s){
+    Matrices.addToSelf(s.perAnnotatorCountOfYAndA, s.deltas);
+    Matrices.addToSelf(s.perDocumentCountOfTopic, s.priors.getBTheta());
+    Matrices.addToSelf(s.perTopicCountOfVocab, s.priors.getBPhi());
+    s.updateDerivedCounts(); // pre-compute some derived counts 
+  }
+  
+  private static void subtractPriorsFromCounts(State s){
+    Matrices.subtractFromSelf(s.perAnnotatorCountOfYAndA, s.deltas);
+    Matrices.subtractFromSelf(s.perDocumentCountOfTopic, s.priors.getBTheta());
+    Matrices.subtractFromSelf(s.perTopicCountOfVocab, s.priors.getBPhi());
+    s.updateDerivedCounts(); // pre-compute some derived counts 
   }
   
   // Builder pattern
@@ -306,12 +320,8 @@ public class ConfusedSLDADiscreteModel {
       // Add prior values to all counts. This takes a liberty with the 
       // "count" semantics, but simplifies the math below since fractional 
       // prior values are ALWAYS added to their corresponding counts.
-      // TODO: precompute sufficient statistics
-      Matrices.addToSelf(state.perAnnotatorCountOfYAndA, state.deltas);
-      Matrices.addToSelf(state.perDocumentCountOfTopic, priors.getBTheta());
-      Matrices.addToSelf(state.perTopicCountOfVocab, priors.getBPhi());
-      state.updateDerivedCounts(); // pre-compute some derived counts 
-
+      addPriorsToCounts(state);
+      
       // create model 
       ConfusedSLDADiscreteModel model = new ConfusedSLDADiscreteModel(state);
       maximizeB(state); // ensure that log-linear weights exist
@@ -535,7 +545,7 @@ public class ConfusedSLDADiscreteModel {
 
     public static double[] zbar(double[] topicCounts, double docSize, double priorBias){
       double[] zbar = DoubleArrays.subtract(topicCounts, priorBias); // remove bias of priors added to counts
-      DoubleArrays.divideToSelf(topicCounts, docSize); // account for word removed
+      DoubleArrays.divideToSelf(zbar, docSize); // account for word removed
       return DoubleArrays.extend(zbar, 1);
     }
     
@@ -799,10 +809,7 @@ public class ConfusedSLDADiscreteModel {
     
     // precomputed values for efficiency
     int wordType = s.documents[doc][word];
-    int documentClass = s.y[doc];
 
-    double[] optimizedMetadataTopicContribution = new double[s.numTopics]; // TODO: move this
-    double[] slowMetadataTopicContribution = new double[s.numTopics]; // TODO: delete this
     // populate unnormalized probability vector and then sample
     for (int t=0; t<s.numTopics; t++){
       
@@ -823,36 +830,12 @@ public class ConfusedSLDADiscreteModel {
         // this is the log-linear portion of the model that 
         // uses weights w to map from a document's empirical topics (zbar) 
         // to its inferred class label (sampled in a different step).
-        // We could drop some terms if we implemented this ourselves, but 
-        // it doesn't seem worth it.
-        Instance zbar = MalletInterface.instanceForTopicCounts(s.perDocumentCountOfTopic[doc], t, s.docSizes[doc], s.priors.getBTheta(), null);
-        s.maxent.getClassificationScores(zbar, s.logisticClassScores);
-        s.zCoeffs[t] *= s.logisticClassScores[documentClass];
-        slowMetadataTopicContribution[t] = s.logisticClassScores[documentClass];
+        // precomputed at the document level.
+        s.zCoeffs[t] *= s.cachedMetadataScores[t];
         
-        // optimized version
-        // TODO: cache this at the document level 
-        // TODO: when it's there, manually decr then incr s.perDocumentCountOfTopic for each topic
-        double numerator = Math.exp(MalletInterface.getParameter(documentClass,t,s)/(s.docSizes[doc]+1));
-        // extend zbar with a bias term on the end always set to 1 (see MalletInterface.getParameters())
-        double[] zzbar = MalletInterface.zbarold(s.perDocumentCountOfTopic[doc], s.docSizes[doc], s.priors.getBTheta()); 
-        double denominator = 0;
-        for (int c=0; c<s.numClasses; c++){
-          double dotprod = (MalletInterface.getParameter(c,t,s)/(s.docSizes[doc]+1)) + DoubleArrays.dotProduct(MalletInterface.getParameters(c,s),zzbar);
-          denominator += Math.exp(dotprod / s.docSizes[doc]); 
-        }
-        optimizedMetadataTopicContribution[t] = numerator/denominator;
       }
       
-      assert DoubleArrays.min(s.logisticClassScores)>=0;
     }
-    // TODO: remove
-    DoubleArrays.normalizeToSelf(slowMetadataTopicContribution);
-    DoubleArrays.normalizeToSelf(optimizedMetadataTopicContribution);
-    double[] newOPtimizedCheck = s.cachedMetadataScores.clone();
-    DoubleArrays.normalizeToSelf(newOPtimizedCheck);
-    Preconditions.checkState(DoubleArrays.equals(slowMetadataTopicContribution, optimizedMetadataTopicContribution, 1e-2));
-    Preconditions.checkState(DoubleArrays.equals(optimizedMetadataTopicContribution, newOPtimizedCheck, 1e-2));
     
     // sample (or maximize) a new topic
     int oldTopic = s.z[doc][word];
@@ -1048,21 +1031,25 @@ public class ConfusedSLDADiscreteModel {
   private static double HYPERPARAM_LEARNING_CONVERGENCE_THRESHOLD = 0.1;
   private static void updateBTheta(State s) {
     logger.info("optimizing btheta in light of most recent topic assignments");
+    subtractPriorsFromCounts(s);
     double oldValue = s.priors.getBTheta();
     IterativeOptimizer optimizer = new IterativeOptimizer(ConvergenceCheckers.relativePercentChange(HYPERPARAM_LEARNING_CONVERGENCE_THRESHOLD));
     SymmetricDirichletMultinomialMLEOptimizable o = SymmetricDirichletMultinomialMLEOptimizable.newOptimizable(s.perDocumentCountOfTopic);
     ValueAndObject<Double> optimum = optimizer.optimize(o, ReturnType.HIGHEST, true, oldValue);
     s.priors.setBTheta(optimum.getObject());
+    addPriorsToCounts(s);
     logger.info("new btheta="+s.priors.getBTheta()+" old btheta="+oldValue);
   }
 
   private static void updateBPhi(State s) {
     logger.info("optimizing bphi in light of most recent topic assignments");
+    subtractPriorsFromCounts(s);
     double oldValue = s.priors.getBPhi();
     IterativeOptimizer optimizer = new IterativeOptimizer(ConvergenceCheckers.relativePercentChange(HYPERPARAM_LEARNING_CONVERGENCE_THRESHOLD));
     SymmetricDirichletMultinomialMLEOptimizable o = SymmetricDirichletMultinomialMLEOptimizable.newOptimizable(s.perTopicCountOfVocab);
     ValueAndObject<Double> optimum = optimizer.optimize(o, ReturnType.HIGHEST, true, oldValue);
     s.priors.setBPhi(optimum.getObject());
+    addPriorsToCounts(s);
     logger.info("new bphi="+s.priors.getBPhi()+" old bphi="+oldValue);
   }
 
