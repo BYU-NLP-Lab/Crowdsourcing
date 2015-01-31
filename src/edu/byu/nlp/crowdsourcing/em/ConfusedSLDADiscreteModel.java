@@ -33,7 +33,6 @@ import cc.mallet.types.LabelAlphabet;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
-import com.google.common.primitives.Doubles;
 
 import edu.byu.nlp.classify.eval.BasicPrediction;
 import edu.byu.nlp.classify.eval.Prediction;
@@ -751,6 +750,11 @@ public class ConfusedSLDADiscreteModel {
     for (int d=0; d<s.numDocuments; d++){
       numChanges += updateZDoc(s, d, null);
     }
+    
+    // do inline hyperparameter optimization after z changes
+    updateBTheta(s);
+    updateBPhi(s);
+    
     return numChanges;
   }
   
@@ -759,6 +763,11 @@ public class ConfusedSLDADiscreteModel {
     for (int d=0; d<s.numDocuments; d++){
       numChanges += updateZDoc(s, d, rnd);
     }
+    
+    // do inline hyperparameter optimization after z changes
+    updateBTheta(s);
+    updateBPhi(s);
+    
     return numChanges;
   }
   
@@ -790,10 +799,6 @@ public class ConfusedSLDADiscreteModel {
     for (int word=0; word<docsize; word++){
       numChanges += updateZDocWord(s, doc, word, rnd);
     }
-    
-    // do inline hyperparameter optimization after z changes
-    updateBTheta(s);
-    updateBPhi(s);
     
     return numChanges;
   }
