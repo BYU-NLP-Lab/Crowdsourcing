@@ -543,12 +543,6 @@ public class ConfusedSLDADiscreteModel {
       DoubleArrays.divideToSelf(zbar, docSize); // account for word removed
       return DoubleArrays.extend(zbar, 1);
     }
-    
-    public static double[] zbarold(double[] topicCounts, double docSize, double priorBias){
-      double[] zbar = DoubleArrays.subtract(topicCounts, priorBias); // remove bias of priors added to counts
-      DoubleArrays.divideToSelf(topicCounts, docSize+1); // account for word removed
-      return DoubleArrays.extend(zbar, 1);
-    }
 
     public static double getParameter(int documentClass, int topic, State s) {
       int rowPos = documentClass*(s.numTopics+1);
@@ -705,7 +699,9 @@ public class ConfusedSLDADiscreteModel {
     // (would be better if we had a distribution over them)
     double[] ybias = DoubleArrays.fromInts(IntArrays.denseCounterOf(s.y, s.numClasses));
     DoubleArrays.normalizeToSelf(ybias);
-    return CrowdsourcingUtils.getAccuracies(ybias, s.perAnnotatorCountOfYAndA);
+    double[][][] annotatorConfusions = Matrices.clone(s.perAnnotatorCountOfYAndA);
+    Matrices.normalizeRowsToSelf(annotatorConfusions);
+    return CrowdsourcingUtils.getAccuracies(ybias, annotatorConfusions);
   }
   
   
