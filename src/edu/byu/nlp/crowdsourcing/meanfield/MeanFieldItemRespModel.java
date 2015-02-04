@@ -32,6 +32,11 @@ import edu.byu.nlp.data.types.Dataset;
 import edu.byu.nlp.data.types.DatasetInstance;
 import edu.byu.nlp.dataset.Datasets;
 import edu.byu.nlp.math.GammaFunctions;
+import edu.byu.nlp.math.optimize.ConvergenceCheckers;
+import edu.byu.nlp.math.optimize.IterativeOptimizer;
+import edu.byu.nlp.math.optimize.ValueAndObject;
+import edu.byu.nlp.math.optimize.IterativeOptimizer.ReturnType;
+import edu.byu.nlp.stats.SymmetricDirichletMultinomialMLEOptimizable;
 import edu.byu.nlp.util.DoubleArrays;
 import edu.byu.nlp.util.IntArrayCounter;
 import edu.byu.nlp.util.IntArrays;
@@ -173,8 +178,23 @@ public class MeanFieldItemRespModel extends TrainableMultiAnnModel implements Me
     VariationalParams tmpvars = this.vars;
     this.vars = this.newvars;
     this.newvars = tmpvars;
+    
+    // optimize hyperparams
+    fitBTheta();
   }
 
+  private static double HYPERPARAM_LEARNING_CONVERGENCE_THRESHOLD = 0.1;
+  private void fitBTheta() {
+    logger.info("optimizing btheta in light of most recent posterior assignments");
+    double oldValue = priors.getBTheta();
+    IterativeOptimizer optimizer = new IterativeOptimizer(ConvergenceCheckers.relativePercentChange(HYPERPARAM_LEARNING_CONVERGENCE_THRESHOLD));
+    double perDocumentClassCounts[][] = Matrices.exp(vars.logg);
+    SymmetricDirichletMultinomialMLEOptimizable o = SymmetricDirichletMultinomialMLEOptimizable.newOptimizable(perDocumentClassCounts,2,2);
+    ValueAndObject<Double> optimum = optimizer.optimize(o, ReturnType.HIGHEST, true, oldValue);
+    double newValue = optimum.getObject();
+    priors.setBTheta(newValue);
+    logger.info("new btheta="+newValue+" old btheta="+oldValue);
+  }
   
   public void fitPi(double[] pi) {
     double[][] g = Matrices.exp(vars.logg);

@@ -196,11 +196,12 @@ public class MeanFieldMomRespModel extends TrainableMultiAnnModel implements Mea
 
   private static double HYPERPARAM_LEARNING_CONVERGENCE_THRESHOLD = 0.1;
   private void fitBTheta() {
-    logger.info("optimizing btheta in light of most recent posterior assignments (trivial update--adopting mean value of posterior)");
+    logger.info("optimizing btheta in light of most recent posterior assignments");
     double oldValue = priors.getBTheta();
     IterativeOptimizer optimizer = new IterativeOptimizer(ConvergenceCheckers.relativePercentChange(HYPERPARAM_LEARNING_CONVERGENCE_THRESHOLD));
     double perDocumentClassCounts[][] = Matrices.exp(vars.logg);
-    SymmetricDirichletMultinomialMLEOptimizable o = SymmetricDirichletMultinomialMLEOptimizable.newOptimizable(perDocumentClassCounts);
+    double[][] dat = new double[][]{Matrices.sumOverFirst(perDocumentClassCounts)};
+    SymmetricDirichletMultinomialMLEOptimizable o = SymmetricDirichletMultinomialMLEOptimizable.newOptimizable(dat,2,2);
     ValueAndObject<Double> optimum = optimizer.optimize(o, ReturnType.HIGHEST, true, oldValue);
     double newValue = optimum.getObject();
     priors.setBTheta(newValue);
@@ -208,13 +209,13 @@ public class MeanFieldMomRespModel extends TrainableMultiAnnModel implements Mea
   }
   
   private void fitBPhi() {
-    logger.info("optimizing bphi in light of most recent posterior assignments (trivial update--adopting mean value of posterior)");
+    logger.info("optimizing bphi in light of most recent posterior assignments");
     double oldValue = priors.getBPhi();
     IterativeOptimizer optimizer = new IterativeOptimizer(ConvergenceCheckers.relativePercentChange(HYPERPARAM_LEARNING_CONVERGENCE_THRESHOLD));
     // TODO: here we are tying ALL bphi hyperparams (even across classes). In this case, inference actually doesn't matter
     // Alternatively, we could fit each class symmetric dirichlet separately. Or even fit each individual parameter (maybe w/ gamma prior).
     double[][] perClassVocabCounts = perClassVocab();
-    SymmetricDirichletMultinomialMLEOptimizable o = SymmetricDirichletMultinomialMLEOptimizable.newOptimizable(perClassVocabCounts);
+    SymmetricDirichletMultinomialMLEOptimizable o = SymmetricDirichletMultinomialMLEOptimizable.newOptimizable(perClassVocabCounts,2,2);
     ValueAndObject<Double> optimum = optimizer.optimize(o, ReturnType.HIGHEST, true, oldValue);
     double newValue = optimum.getObject();
     priors.setBPhi(newValue);

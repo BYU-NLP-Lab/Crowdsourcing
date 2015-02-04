@@ -1039,7 +1039,7 @@ public class ConfusedSLDADiscreteModel {
     subtractPriorsFromCounts(s);
     double oldValue = s.priors.getBTheta();
     IterativeOptimizer optimizer = new IterativeOptimizer(ConvergenceCheckers.relativePercentChange(HYPERPARAM_LEARNING_CONVERGENCE_THRESHOLD));
-    SymmetricDirichletMultinomialMLEOptimizable o = SymmetricDirichletMultinomialMLEOptimizable.newOptimizable(s.perDocumentCountOfTopic);
+    SymmetricDirichletMultinomialMLEOptimizable o = SymmetricDirichletMultinomialMLEOptimizable.newOptimizable(s.perDocumentCountOfTopic,2,2);
     ValueAndObject<Double> optimum = optimizer.optimize(o, ReturnType.HIGHEST, true, oldValue);
     s.priors.setBTheta(optimum.getObject());
     addPriorsToCounts(s);
@@ -1052,7 +1052,7 @@ public class ConfusedSLDADiscreteModel {
     double oldValue = s.priors.getBPhi();
     IterativeOptimizer optimizer = new IterativeOptimizer(ConvergenceCheckers.relativePercentChange(HYPERPARAM_LEARNING_CONVERGENCE_THRESHOLD));
     // TODO: we could fit each class symmetric dirichlet separately. Alternatively, we could fit each individual parameter (maybe w/ gamma prior)
-    SymmetricDirichletMultinomialMLEOptimizable o = SymmetricDirichletMultinomialMLEOptimizable.newOptimizable(s.perTopicCountOfVocab);
+    SymmetricDirichletMultinomialMLEOptimizable o = SymmetricDirichletMultinomialMLEOptimizable.newOptimizable(s.perTopicCountOfVocab,2,2);
     ValueAndObject<Double> optimum = optimizer.optimize(o, ReturnType.HIGHEST, true, oldValue);
     s.priors.setBPhi(optimum.getObject());
     addPriorsToCounts(s);
