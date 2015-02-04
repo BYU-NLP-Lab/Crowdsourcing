@@ -36,6 +36,11 @@ import edu.byu.nlp.data.types.DatasetInstance;
 import edu.byu.nlp.data.types.SparseFeatureVector.EntryVisitor;
 import edu.byu.nlp.dataset.Datasets;
 import edu.byu.nlp.math.GammaFunctions;
+import edu.byu.nlp.math.optimize.ConvergenceCheckers;
+import edu.byu.nlp.math.optimize.IterativeOptimizer;
+import edu.byu.nlp.math.optimize.IterativeOptimizer.ReturnType;
+import edu.byu.nlp.math.optimize.ValueAndObject;
+import edu.byu.nlp.stats.SymmetricDirichletMultinomialMLEOptimizable;
 import edu.byu.nlp.util.DoubleArrays;
 import edu.byu.nlp.util.IntArrayCounter;
 import edu.byu.nlp.util.IntArrays;
@@ -71,6 +76,7 @@ public class MeanFieldMomRespModel extends TrainableMultiAnnModel implements Mea
   private double[][] digammaOfSummedNus;
   private double[][] digammaOfLambdas;
   private double[] digammaOfSummedLambda;
+  private double[][] documents;
   
   static class VariationalParams{
     double[][] logg; // g(y) dim=NxK
@@ -171,6 +177,7 @@ public class MeanFieldMomRespModel extends TrainableMultiAnnModel implements Mea
   /** {@inheritDoc} */
   @Override
   public void maximize() {
+    // optimize posterior distributions wrt one another
     fitG(newvars.logg);
     fitPi(newvars.pi);
     fitNu(newvars.nu);
@@ -180,8 +187,60 @@ public class MeanFieldMomRespModel extends TrainableMultiAnnModel implements Mea
     VariationalParams tmpvars = this.vars;
     this.vars = this.newvars;
     this.newvars = tmpvars;
+    
+    // optimize hyperparameters wrt current posterior distributions
+    fitBTheta();
+    fitBPhi();
   }
 
+
+  private static double HYPERPARAM_LEARNING_CONVERGENCE_THRESHOLD = 0.1;
+  private void fitBTheta() {
+    logger.info("optimizing btheta in light of most recent posterior assignments (trivial update--adopting mean value of posterior)");
+    double oldValue = priors.getBTheta();
+    IterativeOptimizer optimizer = new IterativeOptimizer(ConvergenceCheckers.relativePercentChange(HYPERPARAM_LEARNING_CONVERGENCE_THRESHOLD));
+    double perDocumentClassCounts[][] = Matrices.exp(vars.logg);
+    SymmetricDirichletMultinomialMLEOptimizable o = SymmetricDirichletMultinomialMLEOptimizable.newOptimizable(perDocumentClassCounts);
+    ValueAndObject<Double> optimum = optimizer.optimize(o, ReturnType.HIGHEST, true, oldValue);
+    double newValue = optimum.getObject();
+    priors.setBTheta(newValue);
+    logger.info("new btheta="+newValue+" old btheta="+oldValue);
+  }
+  
+  private void fitBPhi() {
+    logger.info("optimizing bphi in light of most recent posterior assignments (trivial update--adopting mean value of posterior)");
+    double oldValue = priors.getBPhi();
+    IterativeOptimizer optimizer = new IterativeOptimizer(ConvergenceCheckers.relativePercentChange(HYPERPARAM_LEARNING_CONVERGENCE_THRESHOLD));
+    // TODO: here we are tying ALL bphi hyperparams (even across classes). In this case, inference actually doesn't matter
+    // Alternatively, we could fit each class symmetric dirichlet separately. Or even fit each individual parameter (maybe w/ gamma prior).
+    double[][] perClassVocabCounts = perClassVocab();
+    SymmetricDirichletMultinomialMLEOptimizable o = SymmetricDirichletMultinomialMLEOptimizable.newOptimizable(perClassVocabCounts);
+    ValueAndObject<Double> optimum = optimizer.optimize(o, ReturnType.HIGHEST, true, oldValue);
+    double newValue = optimum.getObject();
+    priors.setBPhi(newValue);
+    logger.info("new bphi="+newValue+" old bphi="+oldValue);
+  }
+
+  private double[][] perClassVocab(){
+    final double[][] perClassVocab = new double[data.getInfo().getNumClasses()][data.getInfo().getNumFeatures()];
+    final double[][] perDocumentClassAssignments = Matrices.exp(vars.logg);
+    
+    for (int d=0; d<instances.size(); d++){
+      DatasetInstance inst = instances.get(d);
+      final double[] docAssignment = perDocumentClassAssignments[d]; 
+      // add each word to each class (proportional to its assignment to that class)
+      inst.asFeatureVector().visitSparseEntries(new EntryVisitor() {
+        @Override
+        public void visitEntry(int index, double value) {
+          for (int c=0; c<data.getInfo().getNumClasses(); c++){
+            perClassVocab[c][index] += value*docAssignment[c];
+          }
+        }
+      });
+      
+    }
+    return perClassVocab;
+  }
   
   public void fitPi(double[] pi) {
     double[][] g = Matrices.exp(vars.logg);
