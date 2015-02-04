@@ -31,7 +31,11 @@ public enum AnnotatorAccuracySetting {
   HIGH (new double[] { 0.90, 0.85, 0.80, 0.75, 0.70 }, 1e100), 
   MED (new double[] { 0.70, 0.65, 0.60, 0.55, 0.50 }, 1e100),
   LOW (new double[] { 0.50, 0.40, 0.30, 0.20, 0.10 }, 1e100),
-  CONFLICT (new double[] { 0.50, 0.40, 0.30, 0.20, 0.10 }, 0.1);
+  CONFLICT (new double[] { 0.50, 0.40, 0.30, 0.20, 0.10 }, 0.1),
+  EXPERT (new double[] { 0.90, 0.91, 0.93, 0.95, 0.97 }, 1e100),
+  INDEPENDENT (new double[]{-1,-1,-1,-1,-1}, 0.1),
+  CROWD (new double[]{-1,-1,-1,-1,-1}, 0.1),
+  ;
   // when this is very large, the off-diagonal is uniform
   private final double symmetricDirichletParam;
   private final double[] accuracies;
@@ -52,20 +56,35 @@ public enum AnnotatorAccuracySetting {
   }
   public double[][][] generateConfusionMatrices(RandomGenerator rnd, int numLabels){
     if (confusionMatrices==null){
-      confusionMatrices = new double[getNumAnnotators()][numLabels][numLabels];
-      // a matrix where non-diag entries
-      // are sampled and scaled to make each row sum to 1
-      for (int a = 0; a < getNumAnnotators(); a++) {
-        double rowDiag = accuracies[a];
-        for (int i = 0; i < numLabels; i++) {
-          // off-diag elements are Dirichlet. Note that when 
-          // symmetricDirichletParam is very large, off-diag elements are uniform
-          double[] offDiag = DirichletDistribution.sampleSymmetric(symmetricDirichletParam, numLabels - 1, rnd);
-          // scale offDiag so row sums to 1
-          DoubleArrays.multiplyToSelf(offDiag, 1.0 - rowDiag); 
-          Iterator<Double> offDiagItr = DoubleArrays.iterator(offDiag);
-          for (int j = 0; j < numLabels; j++) {
-            confusionMatrices[a][i][j] = i == j ? rowDiag : offDiagItr.next();
+      if (this==CROWD){
+        // a matrix fit empirically to crowdflower annotator characteristics
+        throw new IllegalArgumentException("CROWD not implemented");
+      }
+      else if (this==INDEPENDENT){
+        confusionMatrices = new double[getNumAnnotators()][numLabels][numLabels];
+        // a matrix where all rows are sampled from a dirichlet
+        for (int a = 0; a < getNumAnnotators(); a++) {
+          for (int i = 0; i < numLabels; i++) {
+            confusionMatrices[a][i] = DirichletDistribution.sampleSymmetric(symmetricDirichletParam, numLabels, rnd);
+          }
+        }
+      }
+      else{
+        confusionMatrices = new double[getNumAnnotators()][numLabels][numLabels];
+        // a matrix where non-diag entries
+        // are sampled and scaled to make each row sum to 1
+        for (int a = 0; a < getNumAnnotators(); a++) {
+          double rowDiag = accuracies[a];
+          for (int i = 0; i < numLabels; i++) {
+            // off-diag elements are Dirichlet. Note that when 
+            // symmetricDirichletParam is very large, off-diag elements are uniform
+            double[] offDiag = DirichletDistribution.sampleSymmetric(symmetricDirichletParam, numLabels - 1, rnd);
+            // scale offDiag so row sums to 1
+            DoubleArrays.multiplyToSelf(offDiag, 1.0 - rowDiag); 
+            Iterator<Double> offDiagItr = DoubleArrays.iterator(offDiag);
+            for (int j = 0; j < numLabels; j++) {
+              confusionMatrices[a][i][j] = i == j ? rowDiag : offDiagItr.next();
+            }
           }
         }
       }
