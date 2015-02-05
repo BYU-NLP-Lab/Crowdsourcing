@@ -15,16 +15,20 @@
  */
 package edu.byu.nlp.crowdsourcing;
 
+import java.io.IOException;
 import java.util.Iterator;
 
 import org.apache.commons.math3.random.RandomGenerator;
 
+import com.google.common.base.Charsets;
 import com.google.common.base.Preconditions;
 
+import edu.byu.nlp.io.Files2;
 import edu.byu.nlp.stats.DirichletDistribution;
 import edu.byu.nlp.util.DoubleArrays;
 import edu.byu.nlp.util.Indexer;
 import edu.byu.nlp.util.Indexers;
+import edu.byu.nlp.util.Matrices;
 
 public enum AnnotatorAccuracySetting {
   GOOD (new double[] { 0.99999, 0.99999, 0.99999, 0.99999, 0.99999 }, 1e100), 
@@ -34,31 +38,43 @@ public enum AnnotatorAccuracySetting {
   CONFLICT (new double[] { 0.50, 0.40, 0.30, 0.20, 0.10 }, 0.1),
   EXPERT (new double[] { 0.90, 0.91, 0.93, 0.95, 0.97 }, 1e100),
   INDEPENDENT (new double[]{-1,-1,-1,-1,-1}, 0.1),
-  CROWD (new double[]{-1,-1,-1,-1,-1}, 0.1),
+  FILE (null, -1),
   ;
   // when this is very large, the off-diagonal is uniform
   private final double symmetricDirichletParam;
-  private final double[] accuracies;
+  private double[] accuracies;
   double[][][] confusionMatrices;
   private AnnotatorAccuracySetting(double[] accuracies, double symmetricDirichletParam){
     this.accuracies=accuracies;
     this.symmetricDirichletParam=symmetricDirichletParam;
   }
   public int getNumAnnotators(){
-    return accuracies.length;
+    Preconditions.checkNotNull(confusionMatrices, "call generateConfusionMatrices() first");
+    return confusionMatrices.length;
   }
   public double[] getAccuracies(){
+    Preconditions.checkNotNull(confusionMatrices, "call generateConfusionMatrices() first");
+    // construct accuracies from confusion matrices, if necessary (e.g., if they were read from file)
+    if (accuracies==null){
+      accuracies = new double[confusionMatrices.length];
+      for (int i=0; i<confusionMatrices.length; i++){
+        accuracies[i] = Matrices.trace(confusionMatrices[i]) / confusionMatrices[0].length;
+      }
+    }
     return accuracies;
   }
   public double[][][] getConfusionMatrices(){
     Preconditions.checkNotNull(confusionMatrices, "call generateConfusionMatrices() first");
     return confusionMatrices;
   }
-  public double[][][] generateConfusionMatrices(RandomGenerator rnd, int numLabels){
+  public double[][][] generateConfusionMatrices(RandomGenerator rnd, int numLabels, String filename){
     if (confusionMatrices==null){
-      if (this==CROWD){
-        // a matrix fit empirically to crowdflower annotator characteristics
-        throw new IllegalArgumentException("CROWD not implemented");
+      if (this==FILE){
+        try {
+          confusionMatrices = Matrices.parseTensor(Files2.toString(filename, Charsets.UTF_8));
+        } catch (IOException e) {
+          throw new IllegalArgumentException("could not parse annotator file: "+filename);
+        }
       }
       else if (this==INDEPENDENT){
         confusionMatrices = new double[getNumAnnotators()][numLabels][numLabels];
