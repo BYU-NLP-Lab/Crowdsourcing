@@ -92,15 +92,15 @@ public class CrowdflowerAnnotatorParameterEstimator {
     // compile annotation stream data into per-annotator annotation matrices
     Dataset data = readData(jsonStream, new MersenneTwister(1));
     logger.info("dataset="+data);
+    int[][][] annotations = Datasets.confusionMatrices(data); // annotations[annotator][true label][annotation] = count
     
     // aggregate them
-    int[][][] annotations = Datasets.confusionMatrices(data); // annotations[annotator][true label][annotation] = count
     double[][][] confusions = aggregateAnnotatorsByConfusionMatrix(annotations, aggregate, k, maxIterations, smooth);
 
     // output to console 
-    logger.info("annotators=\n"+Matrices.toString(confusions, 10, 10, 20, 3));
+    logger.info("aggregated annotators=\n"+Matrices.toString(confusions, 10, 10, 20, 3));
     for (int i=0; i<confusions.length; i++){
-      logger.info("annotator #"+i+" accuracy="+accuracyOf(confusions[i]));
+      logger.info("aggregated annotator #"+i+" accuracy="+accuracyOf(confusions[i]));
     }
     
     // output to file 
@@ -168,7 +168,7 @@ public class CrowdflowerAnnotatorParameterEstimator {
     }
     
     // collect clusters into sets
-    Map<Integer,Set<double[][]>> clusterMap = Maps.newIdentityHashMap();
+    Map<Integer,Set<double[][]>> clusterMap = Maps.newHashMap();
     for (int i=0; i<clusters.length; i++){
       int clusterAssignment = clusters[i];
       if (!clusterMap.containsKey(clusterAssignment)){
