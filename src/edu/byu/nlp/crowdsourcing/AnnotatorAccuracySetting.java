@@ -67,7 +67,7 @@ public enum AnnotatorAccuracySetting {
     Preconditions.checkNotNull(confusionMatrices, "call generateConfusionMatrices() first");
     return confusionMatrices;
   }
-  public double[][][] generateConfusionMatrices(RandomGenerator rnd, int numLabels, String filename){
+  public void generateConfusionMatrices(RandomGenerator rnd, int numLabels, String filename){
     if (confusionMatrices==null){
       if (this==FILE){
         try {
@@ -77,19 +77,19 @@ public enum AnnotatorAccuracySetting {
         }
       }
       else if (this==INDEPENDENT){
-        confusionMatrices = new double[getNumAnnotators()][numLabels][numLabels];
+        confusionMatrices = new double[accuracies.length][numLabels][numLabels];
         // a matrix where all rows are sampled from a dirichlet
-        for (int a = 0; a < getNumAnnotators(); a++) {
+        for (int a = 0; a < accuracies.length; a++) {
           for (int i = 0; i < numLabels; i++) {
             confusionMatrices[a][i] = DirichletDistribution.sampleSymmetric(symmetricDirichletParam, numLabels, rnd);
           }
         }
       }
       else{
-        confusionMatrices = new double[getNumAnnotators()][numLabels][numLabels];
+        confusionMatrices = new double[accuracies.length][numLabels][numLabels];
         // a matrix where non-diag entries
         // are sampled and scaled to make each row sum to 1
-        for (int a = 0; a < getNumAnnotators(); a++) {
+        for (int a = 0; a < accuracies.length; a++) {
           double rowDiag = accuracies[a];
           for (int i = 0; i < numLabels; i++) {
             // off-diag elements are Dirichlet. Note that when 
@@ -105,8 +105,6 @@ public enum AnnotatorAccuracySetting {
         }
       }
     }
-
-    return confusionMatrices;
   }
   /**
    * A trivial identity indexer where id=index
