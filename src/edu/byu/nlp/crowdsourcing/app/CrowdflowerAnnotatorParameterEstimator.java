@@ -86,7 +86,7 @@ public class CrowdflowerAnnotatorParameterEstimator {
   
   private enum ConfusionMatrixTruth {MAJORITY, GOLD}
   @Option(help = "calculate annotator confusion matrices by comparing their answers with the gold standard. If false, ")
-  private static ConfusionMatrixTruth confusionMatrixTruth = ConfusionMatrixTruth.MAJORITY;
+  private static ConfusionMatrixTruth confusionMatrixTruth = ConfusionMatrixTruth.GOLD;
   
   
   public static void main(String[] args) throws IOException{
