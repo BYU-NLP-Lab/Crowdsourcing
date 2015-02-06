@@ -80,6 +80,13 @@ public class CrowdflowerAnnotatorParameterEstimator {
 
   @Option(help = "how many iterations should clustering algorithms do?")
   private static int maxIterations = 10000;
+
+  @Option(help = "some choices (kmeans initialization; tie-breaking in majority vote) are stochastic. Seed the RNG.")
+  private static long seed = System.currentTimeMillis();
+  
+  private enum ConfusionMatrixTruth {MAJORITY, GOLD}
+  @Option(help = "calculate annotator confusion matrices by comparing their answers with the gold standard. If false, ")
+  private static ConfusionMatrixTruth confusionMatrixTruth = ConfusionMatrixTruth.MAJORITY;
   
   
   public static void main(String[] args) throws IOException{
@@ -89,23 +96,36 @@ public class CrowdflowerAnnotatorParameterEstimator {
     Preconditions.checkArgument(smooth>=0,"invalid smoothing value="+smooth);
     Preconditions.checkArgument(k>0,"invalid number of clusters="+k);
     
-    // compile annotation stream data into per-annotator annotation matrices
-    Dataset data = readData(jsonStream, new MersenneTwister(1));
-    logger.info("dataset="+data);
-    int[][][] annotations = Datasets.confusionMatrices(data); // annotations[annotator][true label][annotation] = count
+    // compile annotation stream data into a dataset
+    RandomGenerator rnd = new MersenneTwister(seed);
+    Dataset data = readData(jsonStream, rnd);
     
-    // aggregate them
-    double[][][] confusions = aggregateAnnotatorsByConfusionMatrix(annotations, aggregate, k, maxIterations, smooth);
+    // create confusion matrices for each annotator wrt some truth
+    int[][][] confusionMatrices; // confusionMatrices[annotator][true label][annotation] = count
+    logger.info("dataset="+data);
+    switch(confusionMatrixTruth){
+    case GOLD:
+      confusionMatrices = Datasets.confusionMatricesWrtGoldLabels(data); 
+      break;
+    case MAJORITY:
+      confusionMatrices = Datasets.confusionMatricesWrtMajorityVoteLabels(data, rnd); 
+      break;
+    default:
+      throw new IllegalArgumentException("unknown truth standard for constructing confusion matrices: "+confusionMatrixTruth);
+    }
+    
+    // aggregate annotators based on their confusion matrices 
+    double[][][] clusteredAnnotatorParameters = aggregateAnnotatorsByConfusionMatrix(confusionMatrices, aggregate, k, maxIterations, smooth);
 
     // output to console 
-    logger.info("aggregated annotators=\n"+Matrices.toString(confusions, 10, 10, 20, 3));
-    for (int i=0; i<confusions.length; i++){
-      logger.info("aggregated annotator #"+i+" accuracy="+accuracyOf(confusions[i]));
+    logger.info("aggregated annotators=\n"+Matrices.toString(clusteredAnnotatorParameters, 10, 10, 20, 3));
+    for (int i=0; i<clusteredAnnotatorParameters.length; i++){
+      logger.info("aggregated annotator #"+i+" accuracy="+accuracyOf(clusteredAnnotatorParameters[i]));
     }
     
     // output to file 
     if (output!=null){
-      Files2.write(Matrices.toString(confusions), output);
+      Files2.write(Matrices.toString(clusteredAnnotatorParameters), output);
     }
   }
   /////////////////////////////
@@ -113,23 +133,23 @@ public class CrowdflowerAnnotatorParameterEstimator {
   /////////////////////////////
 
 
-  public static double[][][] aggregateAnnotatorsByConfusionMatrix(int[][][] annotations, AggregationMethod aggregate, int k, int maxIterations, double smooth) throws IOException {
-    Preconditions.checkNotNull(annotations);
-    Preconditions.checkArgument(annotations.length>0);
-    int numAnnotators = annotations.length;
+  public static double[][][] aggregateAnnotatorsByConfusionMatrix(int[][][] confusionMatrices, AggregationMethod aggregate, int k, int maxIterations, double smooth) throws IOException {
+    Preconditions.checkNotNull(confusionMatrices);
+    Preconditions.checkArgument(confusionMatrices.length>0);
+    int numAnnotators = confusionMatrices.length;
     
     logger.info("num annotators="+numAnnotators);
-    logger.info("total annotations="+IntArrays.sum(annotations));
+    logger.info("total annotations="+IntArrays.sum(confusionMatrices));
 
     // smoothed annotation counts
-    double[][][] confusions = Matrices.fromInts(annotations);
-    Matrices.addToSelf(confusions, smooth);
+    double[][][] annotatorParameters = Matrices.fromInts(confusionMatrices);
+    Matrices.addToSelf(annotatorParameters, smooth);
 
     // empirical confusion matrices
-    Matrices.normalizeRowsToSelf(confusions);
+    Matrices.normalizeRowsToSelf(annotatorParameters);
     
     // put each annotator in a singleton cluster
-    int[] clusters = IntArrays.sequence(0, confusions.length);
+    int[] clusterAssignments = IntArrays.sequence(0, annotatorParameters.length);
     
     // precompute potenially useful quantities
     double uniformClusterSize = (double)numAnnotators / k;  
@@ -141,70 +161,70 @@ public class CrowdflowerAnnotatorParameterEstimator {
       break;
     case RANDOM:
       // add (approx) equal shares of each cluster to the vector, then shuffle 
-      Arrays.fill(clusters, k); // this ensures leftovers are assigned to last cluster
+      Arrays.fill(clusterAssignments, k); // this ensures leftovers are assigned to last cluster
       for (int c=0; c<k; c++){
-        Arrays.fill(clusters, (int)Math.floor(c*uniformClusterSize), (int)Math.floor(c*uniformClusterSize+uniformClusterSize), c);
+        Arrays.fill(clusterAssignments, (int)Math.floor(c*uniformClusterSize), (int)Math.floor(c*uniformClusterSize+uniformClusterSize), c);
       }
-      clusters = IntArrays.shuffled(clusters);
+      clusterAssignments = IntArrays.shuffled(clusterAssignments);
       break;
     case ACCURACY:
-      sortByAccuracy(confusions); // re-order annotators so that more accurate ones appear first
+      sortByAccuracy(annotatorParameters); // re-order annotators so that more accurate ones appear first
       logger.debug("sorting annotators by accuracy");
-      for (int i=0; i<confusions.length; i++){
-        logger.debug("annotator #"+i+" accuracy="+accuracyOf(confusions[i]));
+      for (int i=0; i<annotatorParameters.length; i++){
+        logger.debug("annotator #"+i+" accuracy="+accuracyOf(annotatorParameters[i]));
       }
-      
       // now divide annotators into equal chunks--like accuracies will cluster together
-      Arrays.fill(clusters, k); // this ensures leftovers are assigned to last cluster
+      Arrays.fill(clusterAssignments, k); // this ensures leftovers are assigned to last cluster
       for (int c=0; c<k; c++){
-        Arrays.fill(clusters, (int)Math.floor(c*uniformClusterSize), (int)Math.floor(c*uniformClusterSize+uniformClusterSize), c);
+        Arrays.fill(clusterAssignments, (int)Math.floor(c*uniformClusterSize), (int)Math.floor(c*uniformClusterSize+uniformClusterSize), c);
       }
       break;
     case KMEANS:
-      assignKMeansClusters(confusions, clusters, k, maxIterations);
+      assignKMeansClusters(annotatorParameters, clusterAssignments, k, maxIterations);
       break;
     default:
       throw new IllegalArgumentException("unknown aggregation method="+aggregate);
     }
     
-    // collect clusters into sets
+    // group clustered parameters
     Map<Integer,Set<double[][]>> clusterMap = Maps.newHashMap();
-    for (int i=0; i<clusters.length; i++){
-      int clusterAssignment = clusters[i];
+    for (int i=0; i<clusterAssignments.length; i++){
+      int clusterAssignment = clusterAssignments[i];
       if (!clusterMap.containsKey(clusterAssignment)){
         clusterMap.put(clusterAssignment, Sets.<double[][]>newIdentityHashSet());
       }
-      clusterMap.get(clusterAssignment).add(confusions[i]);
+      clusterMap.get(clusterAssignment).add(annotatorParameters[i]);
     }
     
-    // aggregate cluster sets
-    List<double[][]> clusteredConfusions = Lists.newArrayList();
+    // aggregate clustered parameters
+    List<double[][]> clusteredAnnotatorParameters = Lists.newArrayList();
     for (Set<double[][]> cluster: clusterMap.values()){
       double[][][] clusterTensor = cluster.toArray(new double[][][]{});
       double[][] averagedConfusions = Matrices.sumOverFirst(clusterTensor);
       Matrices.divideToSelf(averagedConfusions, cluster.size());
-      clusteredConfusions.add(averagedConfusions);
+      clusteredAnnotatorParameters.add(averagedConfusions);
     }
     
     // re-assign confusions
-    return clusteredConfusions.toArray(new double[][][]{});
+    return clusteredAnnotatorParameters.toArray(new double[][][]{});
     
   }
   
   
   /**
-   * This returns a set of clustered matrices. Averaging them yields the centroid of the cluster.  
+   * This returns a set of clustered annotator parameters. Averaging them yields the centroid of the cluster.
+   * Note that both the order of the annotator parameters AND the cluster assignment change in place.  
    */
-  private static void assignKMeansClusters(double[][][] confusions, final int[] clusterAssignments, int k, int maxIterations){
-    Preconditions.checkNotNull(confusions);
+  private static void assignKMeansClusters(double[][][] annotatorParameters, final int[] clusterAssignments, int k, int maxIterations){
+    Preconditions.checkNotNull(annotatorParameters);
     Preconditions.checkNotNull(clusterAssignments);
-    Preconditions.checkArgument(confusions.length>0);
-    Preconditions.checkArgument(confusions.length==clusterAssignments.length);
-    int numClasses = confusions[0].length;
+    Preconditions.checkArgument(annotatorParameters.length>0);
+    Preconditions.checkArgument(annotatorParameters.length==clusterAssignments.length);
+    int numClasses = annotatorParameters[0].length;
     
     List<ClusterableAnnotator> clusterableAnnotators= Lists.newArrayList();
-    for (double[][] confusion: confusions){
-      clusterableAnnotators.add(new ClusterableAnnotator(confusion));
+    for (double[][] annotatorParam: annotatorParameters){
+      clusterableAnnotators.add(new ClusterableAnnotator(annotatorParam));
     }
     
     KMeansPlusPlusClusterer<ClusterableAnnotator> clusterer = new KMeansPlusPlusClusterer<ClusterableAnnotator>(k, maxIterations);
@@ -216,7 +236,7 @@ public class CrowdflowerAnnotatorParameterEstimator {
         // note: we don't return the centroid point here because averaging the points in the cluster 
         // yields precisely the centroid point.
         // stick this annotator in this location in the confusions
-        confusions[annotatorIndex] = Matrices.unflatten(annotator.getPoint(), numClasses, numClasses);
+        annotatorParameters[annotatorIndex] = Matrices.unflatten(annotator.getPoint(), numClasses, numClasses);
         // assign this position to cluster c
         clusterAssignments[annotatorIndex] = c;
         annotatorIndex++;
