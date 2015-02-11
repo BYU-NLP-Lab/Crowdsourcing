@@ -212,7 +212,7 @@ public class MultiAnnModelBuilders {
         double docWeight = getDocumentWeight(docIndex);
         
         SparseRealMatrix annotations = instance.getAnnotations().getLabelAnnotations();
-        for (int annotator=0; annotator<instance.getInfo().getNumAnnotators(); annotator++){
+        for (int annotator=0; annotator<data.getInfo().getNumAnnotators(); annotator++){
           for (int annval=0; annval<data.getInfo().getNumClasses(); annval++){
             // NOTE: this will need to update every time a new annotation comes in!!!!!
             countOfJTruthAndAnn[annotator][y[docIndex]][annval] += docWeight * annotations.getEntry(annotator, annval);
@@ -243,7 +243,7 @@ public class MultiAnnModelBuilders {
         int i = e.getIndex();
         // pfelt: weighted documents are scaled accordingly
         double docWeight = getDocumentWeight(i);
-        for (int ann=0; ann<e.getElement().getInfo().getNumAnnotators(); ann++){
+        for (int ann=0; ann<data.getInfo().getNumAnnotators(); ann++){
           docJCount[i][ann] += SparseRealMatrices.rowSum(ann, e.getElement().getAnnotations().getLabelAnnotations()) * docWeight;
         }
 //        SparseRealMatrices.rowSum(i, e.getElement().getAnnotations().getLabelAnnotations());
