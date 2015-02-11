@@ -40,7 +40,7 @@ import edu.byu.nlp.math.optimize.ConvergenceCheckers;
 import edu.byu.nlp.math.optimize.IterativeOptimizer;
 import edu.byu.nlp.math.optimize.IterativeOptimizer.ReturnType;
 import edu.byu.nlp.math.optimize.ValueAndObject;
-import edu.byu.nlp.stats.SymmetricDirichletMultinomialMLEOptimizable;
+import edu.byu.nlp.stats.SymmetricDirichletMultinomialMatrixMLEOptimizable;
 import edu.byu.nlp.util.DoubleArrays;
 import edu.byu.nlp.util.IntArrayCounter;
 import edu.byu.nlp.util.IntArrays;
@@ -201,7 +201,7 @@ public class MeanFieldMomRespModel extends TrainableMultiAnnModel implements Mea
     IterativeOptimizer optimizer = new IterativeOptimizer(ConvergenceCheckers.relativePercentChange(HYPERPARAM_LEARNING_CONVERGENCE_THRESHOLD));
     double perDocumentClassCounts[][] = Matrices.exp(vars.logg);
     double[][] dat = new double[][]{Matrices.sumOverFirst(perDocumentClassCounts)};
-    SymmetricDirichletMultinomialMLEOptimizable o = SymmetricDirichletMultinomialMLEOptimizable.newOptimizable(dat,2,2);
+    SymmetricDirichletMultinomialMatrixMLEOptimizable o = SymmetricDirichletMultinomialMatrixMLEOptimizable.newOptimizable(dat,2,2);
     ValueAndObject<Double> optimum = optimizer.optimize(o, ReturnType.HIGHEST, true, oldValue);
     double newValue = optimum.getObject();
     priors.setBTheta(newValue);
@@ -215,7 +215,7 @@ public class MeanFieldMomRespModel extends TrainableMultiAnnModel implements Mea
     // TODO: here we are tying ALL bphi hyperparams (even across classes). In this case, inference actually doesn't matter
     // Alternatively, we could fit each class symmetric dirichlet separately. Or even fit each individual parameter (maybe w/ gamma prior).
     double[][] perClassVocabCounts = perClassVocab();
-    SymmetricDirichletMultinomialMLEOptimizable o = SymmetricDirichletMultinomialMLEOptimizable.newOptimizable(perClassVocabCounts,2,2);
+    SymmetricDirichletMultinomialMatrixMLEOptimizable o = SymmetricDirichletMultinomialMatrixMLEOptimizable.newOptimizable(perClassVocabCounts,2,2);
     ValueAndObject<Double> optimum = optimizer.optimize(o, ReturnType.HIGHEST, true, oldValue);
     double newValue = optimum.getObject();
     priors.setBPhi(newValue);
