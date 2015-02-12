@@ -36,7 +36,7 @@ import edu.byu.nlp.math.optimize.ConvergenceCheckers;
 import edu.byu.nlp.math.optimize.IterativeOptimizer;
 import edu.byu.nlp.math.optimize.ValueAndObject;
 import edu.byu.nlp.math.optimize.IterativeOptimizer.ReturnType;
-import edu.byu.nlp.stats.SymmetricDirichletMultinomialMatrixMLEOptimizable;
+import edu.byu.nlp.stats.SymmetricDirichletMultinomialMatrixMAPOptimizable;
 import edu.byu.nlp.util.DoubleArrays;
 import edu.byu.nlp.util.IntArrayCounter;
 import edu.byu.nlp.util.IntArrays;
@@ -189,7 +189,7 @@ public class MeanFieldItemRespModel extends TrainableMultiAnnModel implements Me
     double oldValue = priors.getBTheta();
     IterativeOptimizer optimizer = new IterativeOptimizer(ConvergenceCheckers.relativePercentChange(HYPERPARAM_LEARNING_CONVERGENCE_THRESHOLD));
     double perDocumentClassCounts[][] = Matrices.exp(vars.logg);
-    SymmetricDirichletMultinomialMatrixMLEOptimizable o = SymmetricDirichletMultinomialMatrixMLEOptimizable.newOptimizable(perDocumentClassCounts,2,2);
+    SymmetricDirichletMultinomialMatrixMAPOptimizable o = SymmetricDirichletMultinomialMatrixMAPOptimizable.newOptimizable(perDocumentClassCounts,2,2);
     ValueAndObject<Double> optimum = optimizer.optimize(o, ReturnType.HIGHEST, true, oldValue);
     double newValue = optimum.getObject();
     priors.setBTheta(newValue);

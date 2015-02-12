@@ -52,7 +52,7 @@ import edu.byu.nlp.math.optimize.IterativeOptimizer;
 import edu.byu.nlp.math.optimize.IterativeOptimizer.ReturnType;
 import edu.byu.nlp.math.optimize.ValueAndObject;
 import edu.byu.nlp.stats.RandomGenerators;
-import edu.byu.nlp.stats.SymmetricDirichletMultinomialMatrixMLEOptimizable;
+import edu.byu.nlp.stats.SymmetricDirichletMultinomialMatrixMAPOptimizable;
 import edu.byu.nlp.util.DoubleArrays;
 import edu.byu.nlp.util.IntArrays;
 import edu.byu.nlp.util.Integers;
@@ -1035,7 +1035,7 @@ public class ConfusedSLDADiscreteModel {
     subtractPriorsFromCounts(s);
     double oldValue = s.priors.getBTheta();
     IterativeOptimizer optimizer = new IterativeOptimizer(ConvergenceCheckers.relativePercentChange(HYPERPARAM_LEARNING_CONVERGENCE_THRESHOLD));
-    SymmetricDirichletMultinomialMatrixMLEOptimizable o = SymmetricDirichletMultinomialMatrixMLEOptimizable.newOptimizable(s.perDocumentCountOfTopic,2,2);
+    SymmetricDirichletMultinomialMatrixMAPOptimizable o = SymmetricDirichletMultinomialMatrixMAPOptimizable.newOptimizable(s.perDocumentCountOfTopic,2,2);
     ValueAndObject<Double> optimum = optimizer.optimize(o, ReturnType.HIGHEST, true, oldValue);
     s.priors.setBTheta(optimum.getObject());
     addPriorsToCounts(s);
@@ -1048,7 +1048,7 @@ public class ConfusedSLDADiscreteModel {
     double oldValue = s.priors.getBPhi();
     IterativeOptimizer optimizer = new IterativeOptimizer(ConvergenceCheckers.relativePercentChange(HYPERPARAM_LEARNING_CONVERGENCE_THRESHOLD));
     // TODO: we could fit each class symmetric dirichlet separately. Alternatively, we could fit each individual parameter (maybe w/ gamma prior)
-    SymmetricDirichletMultinomialMatrixMLEOptimizable o = SymmetricDirichletMultinomialMatrixMLEOptimizable.newOptimizable(s.perTopicCountOfVocab,2,2);
+    SymmetricDirichletMultinomialMatrixMAPOptimizable o = SymmetricDirichletMultinomialMatrixMAPOptimizable.newOptimizable(s.perTopicCountOfVocab,2,2);
     ValueAndObject<Double> optimum = optimizer.optimize(o, ReturnType.HIGHEST, true, oldValue);
     s.priors.setBPhi(optimum.getObject());
     addPriorsToCounts(s);
