@@ -52,11 +52,13 @@ import edu.byu.nlp.math.optimize.IterativeOptimizer;
 import edu.byu.nlp.math.optimize.IterativeOptimizer.ReturnType;
 import edu.byu.nlp.math.optimize.ValueAndObject;
 import edu.byu.nlp.stats.RandomGenerators;
+import edu.byu.nlp.stats.SymmetricDirichletMultinomialDiagonalMatrixMAPOptimizable;
 import edu.byu.nlp.stats.SymmetricDirichletMultinomialMatrixMAPOptimizable;
 import edu.byu.nlp.util.DoubleArrays;
 import edu.byu.nlp.util.IntArrays;
 import edu.byu.nlp.util.Integers;
 import edu.byu.nlp.util.Matrices;
+import edu.byu.nlp.util.Pair;
 
 /**
  * @author plf1
@@ -893,6 +895,10 @@ public class ConfusedSLDADiscreteModel {
     for (int d=0; d<s.numDocuments; d++){
       numChanges += updateYDoc(s, d, null);
     }
+    
+    // do inline hyperparameter optimization after y changes
+    updateBGamma(s);
+    
     return numChanges;
   }
   
@@ -901,6 +907,7 @@ public class ConfusedSLDADiscreteModel {
     for (int d=0; d<s.numDocuments; d++){
       numChanges += updateYDoc(s, d, rnd);
     }
+    updateBGamma(s);
     return numChanges;
   }
 
@@ -1029,12 +1036,11 @@ public class ConfusedSLDADiscreteModel {
   /////////////////////////////////////////////////
   // Hyperparameter learning  
   /////////////////////////////////////////////////
-  private static double HYPERPARAM_LEARNING_CONVERGENCE_THRESHOLD = 0.1;
   private static void updateBTheta(State s) {
     logger.info("optimizing btheta in light of most recent topic assignments");
     subtractPriorsFromCounts(s);
     double oldValue = s.priors.getBTheta();
-    IterativeOptimizer optimizer = new IterativeOptimizer(ConvergenceCheckers.relativePercentChange(HYPERPARAM_LEARNING_CONVERGENCE_THRESHOLD));
+    IterativeOptimizer optimizer = new IterativeOptimizer(ConvergenceCheckers.relativePercentChange(PriorSpecification.HYPERPARAM_LEARNING_CONVERGENCE_THRESHOLD));
     SymmetricDirichletMultinomialMatrixMAPOptimizable o = SymmetricDirichletMultinomialMatrixMAPOptimizable.newOptimizable(s.perDocumentCountOfTopic,2,2);
     ValueAndObject<Double> optimum = optimizer.optimize(o, ReturnType.HIGHEST, true, oldValue);
     s.priors.setBTheta(optimum.getObject());
@@ -1046,7 +1052,7 @@ public class ConfusedSLDADiscreteModel {
     logger.info("optimizing bphi in light of most recent topic assignments");
     subtractPriorsFromCounts(s);
     double oldValue = s.priors.getBPhi();
-    IterativeOptimizer optimizer = new IterativeOptimizer(ConvergenceCheckers.relativePercentChange(HYPERPARAM_LEARNING_CONVERGENCE_THRESHOLD));
+    IterativeOptimizer optimizer = new IterativeOptimizer(ConvergenceCheckers.relativePercentChange(PriorSpecification.HYPERPARAM_LEARNING_CONVERGENCE_THRESHOLD));
     // TODO: we could fit each class symmetric dirichlet separately. Alternatively, we could fit each individual parameter (maybe w/ gamma prior)
     SymmetricDirichletMultinomialMatrixMAPOptimizable o = SymmetricDirichletMultinomialMatrixMAPOptimizable.newOptimizable(s.perTopicCountOfVocab,2,2);
     ValueAndObject<Double> optimum = optimizer.optimize(o, ReturnType.HIGHEST, true, oldValue);
@@ -1055,14 +1061,23 @@ public class ConfusedSLDADiscreteModel {
     logger.info("new bphi="+s.priors.getBPhi()+" old bphi="+oldValue);
   }
 
-//  private static void updateBGamma(State s) {
-//    logger.info("optimizing bphi in light of most recent topic assignments");
-//    double oldValue = s.priors.getBPhi();
-//    IterativeOptimizer optimizer = new IterativeOptimizer(ConvergenceCheckers.relativePercentChange(1e-10));
-//    s.per
-//    SymmetricDirichletMultinomialMLEOptimizable o = SymmetricDirichletMultinomialMLEOptimizable.newOptimizable(s.);
-//    ValueAndObject<Double> optimum = optimizer.optimize(o, ReturnType.HIGHEST, true, oldValue);
-//    s.priors.setBPhi(optimum.getObject());
-//    logger.info("new bphi="+s.priors.getBPhi()+" old bphi="+oldValue);
-//  }
+  private static void updateBGamma(State s) {
+    logger.info("optimizing bgamma in light of most recent topic assignments");
+    subtractPriorsFromCounts(s);
+    Pair<Double,Double> oldValue = Pair.of(s.deltas[0][0][0], s.deltas[0][0][1]);
+    IterativeOptimizer optimizer = new IterativeOptimizer(ConvergenceCheckers.relativePercentChange(PriorSpecification.HYPERPARAM_LEARNING_CONVERGENCE_THRESHOLD));
+    SymmetricDirichletMultinomialDiagonalMatrixMAPOptimizable o = SymmetricDirichletMultinomialDiagonalMatrixMAPOptimizable.newOptimizable(s.perAnnotatorCountOfYAndA, 2, 2);
+    ValueAndObject<Pair<Double,Double>> optimum = optimizer.optimize(o, ReturnType.HIGHEST, true, oldValue);
+    double newDiag = optimum.getObject().getFirst();
+    double newOffDiag = optimum.getObject().getSecond();
+    for (int j=0; j<s.numAnnotators; j++){
+    	for (int k=0; k<s.numClasses; k++){
+    		for (int kprime=0; kprime<s.numClasses; kprime++){
+    			s.deltas[j][k][kprime] = (k==kprime)? newDiag: newOffDiag;
+    		}
+    	}
+    }
+    addPriorsToCounts(s);
+    logger.info("new bgamma="+optimum.getObject()+" old bgamma="+oldValue);
+  }
 }

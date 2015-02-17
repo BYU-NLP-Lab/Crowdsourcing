@@ -18,30 +18,40 @@ package edu.byu.nlp.crowdsourcing;
 import com.google.common.base.Preconditions;
 
 public class PriorSpecification {
+
+  public static final double HYPERPARAM_LEARNING_CONVERGENCE_THRESHOLD = 1e-4;
+	
   private double bTheta;
   private final double bMu;
   private final double cMu;
-  private final double[] bAlpha;
-  private final double cAlpha;
+  private double bGamma;
+  private double cGamma;
   private double bPhi;
+  private int numAnnotators;
 
-  public PriorSpecification(double bTheta, double bMu, double cMu, double[] bAlpha, double cAlpha, double bPhi) {
+  /**
+   * bGamma is only array valued for legacy support. All values of bGamma must be the same. 
+   */
+  @Deprecated
+  public PriorSpecification(double bTheta, double bMu, double cMu, double[] bGamma, double cGamma, double bPhi) {
+	  this(bTheta, bMu, cMu, bGamma[0], cGamma, bPhi, bGamma.length);
+  }
+  
+  public PriorSpecification(double bTheta, double bMu, double cMu, double bGamma, double cGamma, double bPhi, int numAnnotators) {
     Preconditions.checkArgument(bTheta > 0.0);
     Preconditions.checkArgument(bMu > 0.0);
     Preconditions.checkArgument(cMu > 0.0);
-    Preconditions.checkNotNull(bAlpha);
-    for (double b : bAlpha) {
-      Preconditions.checkArgument(b > 0.0);
-    }
-    Preconditions.checkArgument(cAlpha > 0.0);
+    Preconditions.checkArgument(bGamma > 0.0);
+    Preconditions.checkArgument(cGamma > 0.0);
     Preconditions.checkArgument(bPhi > 0.0);
 
     this.bTheta = bTheta;
     this.bMu = bMu;
     this.cMu = cMu;
-    this.bAlpha = bAlpha;
-    this.cAlpha = cAlpha;
+    this.bGamma = bGamma;
+    this.cGamma = cGamma;
     this.bPhi = bPhi;
+    this.numAnnotators=numAnnotators;
   }
 
   public double getBTheta() {
@@ -60,12 +70,25 @@ public class PriorSpecification {
     return cMu;
   }
 
+  public double getBGamma() {
+	  return bGamma;
+  }
+  
+  @Deprecated
   public double getBGamma(int annotator) {
-    return bAlpha[annotator];
+    return getBGamma();
+  }
+  
+  public void setBGamma(double val){
+	  bGamma = val;
   }
 
   public double getCGamma() {
-    return cAlpha;
+    return cGamma;
+  }
+  
+  public void setCGamma(double val){
+	  this.cGamma = val;
   }
 
   public double getBPhi() {
@@ -77,6 +100,6 @@ public class PriorSpecification {
   }
 
   public int getNumAnnotators() {
-    return bAlpha.length;
+    return numAnnotators;
   }
 }

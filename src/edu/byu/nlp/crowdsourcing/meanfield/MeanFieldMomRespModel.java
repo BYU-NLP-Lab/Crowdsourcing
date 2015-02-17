@@ -30,7 +30,6 @@ import edu.byu.nlp.crowdsourcing.MultiAnnModel;
 import edu.byu.nlp.crowdsourcing.MultiAnnModelBuilders.AbstractMultiAnnModelBuilder;
 import edu.byu.nlp.crowdsourcing.MultiAnnState;
 import edu.byu.nlp.crowdsourcing.PriorSpecification;
-import edu.byu.nlp.crowdsourcing.TrainableMultiAnnModel;
 import edu.byu.nlp.data.types.Dataset;
 import edu.byu.nlp.data.types.DatasetInstance;
 import edu.byu.nlp.data.types.SparseFeatureVector.EntryVisitor;
@@ -40,17 +39,19 @@ import edu.byu.nlp.math.optimize.ConvergenceCheckers;
 import edu.byu.nlp.math.optimize.IterativeOptimizer;
 import edu.byu.nlp.math.optimize.IterativeOptimizer.ReturnType;
 import edu.byu.nlp.math.optimize.ValueAndObject;
+import edu.byu.nlp.stats.SymmetricDirichletMultinomialDiagonalMatrixMAPOptimizable;
 import edu.byu.nlp.stats.SymmetricDirichletMultinomialMatrixMAPOptimizable;
 import edu.byu.nlp.util.DoubleArrays;
 import edu.byu.nlp.util.IntArrayCounter;
 import edu.byu.nlp.util.IntArrays;
 import edu.byu.nlp.util.Matrices;
 import edu.byu.nlp.util.MatrixAverager;
+import edu.byu.nlp.util.Pair;
 
 /**
  * @author pfelt
  */
-public class MeanFieldMomRespModel extends TrainableMultiAnnModel implements MeanFieldMultiAnnModel {
+public class MeanFieldMomRespModel extends AbstractMeanFieldMultiAnnModel {
 
   private static final Logger logger = LoggerFactory.getLogger(MeanFieldMomRespModel.class);
 
@@ -191,14 +192,14 @@ public class MeanFieldMomRespModel extends TrainableMultiAnnModel implements Mea
     // optimize hyperparameters wrt current posterior distributions
     fitBTheta();
     fitBPhi();
+    fitBGamma();
   }
 
 
-  private static double HYPERPARAM_LEARNING_CONVERGENCE_THRESHOLD = 0.1;
   private void fitBTheta() {
     logger.info("optimizing btheta in light of most recent posterior assignments");
     double oldValue = priors.getBTheta();
-    IterativeOptimizer optimizer = new IterativeOptimizer(ConvergenceCheckers.relativePercentChange(HYPERPARAM_LEARNING_CONVERGENCE_THRESHOLD));
+    IterativeOptimizer optimizer = new IterativeOptimizer(ConvergenceCheckers.relativePercentChange(PriorSpecification.HYPERPARAM_LEARNING_CONVERGENCE_THRESHOLD));
     double perDocumentClassCounts[][] = Matrices.exp(vars.logg);
     double[][] dat = new double[][]{Matrices.sumOverFirst(perDocumentClassCounts)};
     SymmetricDirichletMultinomialMatrixMAPOptimizable o = SymmetricDirichletMultinomialMatrixMAPOptimizable.newOptimizable(dat,2,2);
@@ -211,36 +212,42 @@ public class MeanFieldMomRespModel extends TrainableMultiAnnModel implements Mea
   private void fitBPhi() {
     logger.info("optimizing bphi in light of most recent posterior assignments");
     double oldValue = priors.getBPhi();
-    IterativeOptimizer optimizer = new IterativeOptimizer(ConvergenceCheckers.relativePercentChange(HYPERPARAM_LEARNING_CONVERGENCE_THRESHOLD));
+    IterativeOptimizer optimizer = new IterativeOptimizer(ConvergenceCheckers.relativePercentChange(PriorSpecification.HYPERPARAM_LEARNING_CONVERGENCE_THRESHOLD));
     // TODO: here we are tying ALL bphi hyperparams (even across classes). In this case, inference actually doesn't matter
     // Alternatively, we could fit each class symmetric dirichlet separately. Or even fit each individual parameter (maybe w/ gamma prior).
-    double[][] perClassVocabCounts = perClassVocab();
+    double[][] perClassVocabCounts = perClassVocab(data, instances, vars.logg);
     SymmetricDirichletMultinomialMatrixMAPOptimizable o = SymmetricDirichletMultinomialMatrixMAPOptimizable.newOptimizable(perClassVocabCounts,2,2);
     ValueAndObject<Double> optimum = optimizer.optimize(o, ReturnType.HIGHEST, true, oldValue);
     double newValue = optimum.getObject();
     priors.setBPhi(newValue);
     logger.info("new bphi="+newValue+" old bphi="+oldValue);
   }
-
-  private double[][] perClassVocab(){
-    final double[][] perClassVocab = new double[data.getInfo().getNumClasses()][data.getInfo().getNumFeatures()];
-    final double[][] perDocumentClassAssignments = Matrices.exp(vars.logg);
-    
-    for (int d=0; d<instances.size(); d++){
-      DatasetInstance inst = instances.get(d);
-      final double[] docAssignment = perDocumentClassAssignments[d]; 
-      // add each word to each class (proportional to its assignment to that class)
-      inst.asFeatureVector().visitSparseEntries(new EntryVisitor() {
-        @Override
-        public void visitEntry(int index, double value) {
-          for (int c=0; c<data.getInfo().getNumClasses(); c++){
-            perClassVocab[c][index] += value*docAssignment[c];
-          }
-        }
-      });
-      
+  private double[][][] annotatorConfusions;
+  private void fitBGamma() {
+	if (annotatorConfusions==null){
+		// track empirical annotator confusion according to inferred correct classes
+	    this.annotatorConfusions = new double[gammaParams.length][gammaParams[0].length][gammaParams[0].length]; 
+	}
+	calculateCurrentAnnotatorConfusions(annotatorConfusions, a, vars.logg);
+    logger.info("optimizing bgamma in light of most recent topic assignments");
+    Pair<Double,Double> oldValue = Pair.of(gammaParams[0][0][0], gammaParams[0][0][1]);
+    IterativeOptimizer optimizer = new IterativeOptimizer(ConvergenceCheckers.relativePercentChange(PriorSpecification.HYPERPARAM_LEARNING_CONVERGENCE_THRESHOLD));
+    SymmetricDirichletMultinomialDiagonalMatrixMAPOptimizable o = SymmetricDirichletMultinomialDiagonalMatrixMAPOptimizable.newOptimizable(annotatorConfusions, 2, 2);
+    ValueAndObject<Pair<Double,Double>> optimum = optimizer.optimize(o, ReturnType.HIGHEST, true, oldValue);
+    double newDiag = optimum.getObject().getFirst();
+    double newOffDiag = optimum.getObject().getSecond();
+    for (int j=0; j<numAnnotators(); j++){
+    	for (int k=0; k<numClasses(); k++){
+    		for (int kprime=0; kprime<numClasses(); kprime++){
+    			gammaParams[j][k][kprime] = (k==kprime)? newDiag: newOffDiag;
+    		}
+    	}
     }
-    return perClassVocab;
+    // setting priors allows driver class to report settled-on values
+    double newCGamma = newDiag + (numClasses()-1)*newOffDiag;
+    priors.setBGamma(newDiag/newCGamma);
+    priors.setCGamma(newCGamma);
+    logger.info("new bgamma="+optimum.getObject()+" old bgamma="+oldValue);
   }
   
   public void fitPi(double[] pi) {

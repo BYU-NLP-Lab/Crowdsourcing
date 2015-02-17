@@ -31,23 +31,29 @@ import edu.byu.nlp.crowdsourcing.MultiAnnModel;
 import edu.byu.nlp.crowdsourcing.MultiAnnModelBuilders.AbstractMultiAnnModelBuilder;
 import edu.byu.nlp.crowdsourcing.MultiAnnState;
 import edu.byu.nlp.crowdsourcing.PriorSpecification;
-import edu.byu.nlp.crowdsourcing.TrainableMultiAnnModel;
 import edu.byu.nlp.data.types.Dataset;
 import edu.byu.nlp.data.types.DatasetInstance;
 import edu.byu.nlp.data.types.SparseFeatureVector.EntryVisitor;
 import edu.byu.nlp.dataset.Datasets;
 import edu.byu.nlp.math.GammaFunctions;
+import edu.byu.nlp.math.optimize.ConvergenceCheckers;
+import edu.byu.nlp.math.optimize.IterativeOptimizer;
+import edu.byu.nlp.math.optimize.IterativeOptimizer.ReturnType;
+import edu.byu.nlp.math.optimize.ValueAndObject;
 import edu.byu.nlp.stats.DirichletDistribution;
+import edu.byu.nlp.stats.SymmetricDirichletMultinomialDiagonalMatrixMAPOptimizable;
+import edu.byu.nlp.stats.SymmetricDirichletMultinomialMatrixMAPOptimizable;
 import edu.byu.nlp.util.DoubleArrays;
 import edu.byu.nlp.util.IntArrayCounter;
 import edu.byu.nlp.util.IntArrays;
 import edu.byu.nlp.util.Matrices;
 import edu.byu.nlp.util.MatrixAverager;
+import edu.byu.nlp.util.Pair;
 
 /**
  * @author pfelt
  */
-public class MeanFieldMultiRespModel extends TrainableMultiAnnModel implements MeanFieldMultiAnnModel {
+public class MeanFieldMultiRespModel extends AbstractMeanFieldMultiAnnModel {
 
   private static final Logger logger = LoggerFactory.getLogger(MeanFieldMultiRespModel.class);
 
@@ -211,6 +217,12 @@ public class MeanFieldMultiRespModel extends TrainableMultiAnnModel implements M
     VariationalParams tmpvars = this.vars;
     this.vars = this.newvars;
     this.newvars = tmpvars;
+    
+    // optimize hyperparameters
+    fitBTheta();
+    fitBPhi();
+    fitBGamma();
+    // TODO: fit mu hypers?
   }
 
   
@@ -424,6 +436,61 @@ public class MeanFieldMultiRespModel extends TrainableMultiAnnModel implements M
     }
     
     return DoubleArrays.exp(logg_i);
+  }
+  
+
+  private void fitBTheta() {
+    logger.info("optimizing btheta in light of most recent posterior assignments");
+    double oldValue = priors.getBTheta();
+    IterativeOptimizer optimizer = new IterativeOptimizer(ConvergenceCheckers.relativePercentChange(PriorSpecification.HYPERPARAM_LEARNING_CONVERGENCE_THRESHOLD));
+    double perDocumentClassCounts[][] = Matrices.exp(vars.logg);
+    double[][] dat = new double[][]{Matrices.sumOverFirst(perDocumentClassCounts)};
+    SymmetricDirichletMultinomialMatrixMAPOptimizable o = SymmetricDirichletMultinomialMatrixMAPOptimizable.newOptimizable(dat,2,2);
+    ValueAndObject<Double> optimum = optimizer.optimize(o, ReturnType.HIGHEST, true, oldValue);
+    double newValue = optimum.getObject();
+    priors.setBTheta(newValue);
+    logger.info("new btheta="+newValue+" old btheta="+oldValue);
+  }
+  
+  private void fitBPhi() {
+    logger.info("optimizing bphi in light of most recent posterior assignments");
+    double oldValue = priors.getBPhi();
+    IterativeOptimizer optimizer = new IterativeOptimizer(ConvergenceCheckers.relativePercentChange(PriorSpecification.HYPERPARAM_LEARNING_CONVERGENCE_THRESHOLD));
+    // TODO: here we are tying ALL bphi hyperparams (even across classes). In this case, inference actually doesn't matter
+    // Alternatively, we could fit each class symmetric dirichlet separately. Or even fit each individual parameter (maybe w/ gamma prior).
+    double[][] perClassVocabCounts = perClassVocab(data, instances, vars.logg);
+    SymmetricDirichletMultinomialMatrixMAPOptimizable o = SymmetricDirichletMultinomialMatrixMAPOptimizable.newOptimizable(perClassVocabCounts,2,2);
+    ValueAndObject<Double> optimum = optimizer.optimize(o, ReturnType.HIGHEST, true, oldValue);
+    double newValue = optimum.getObject();
+    priors.setBPhi(newValue);
+    logger.info("new bphi="+newValue+" old bphi="+oldValue);
+  }
+  private double[][][] annotatorConfusions;
+  private void fitBGamma() {
+	if (annotatorConfusions==null){
+		// track empirical annotator confusion according to inferred correct classes
+	    this.annotatorConfusions = new double[gammaParams.length][gammaParams[0].length][gammaParams[0].length]; 
+	}
+	calculateCurrentAnnotatorConfusions(annotatorConfusions, a, vars.logg);
+    logger.info("optimizing bgamma in light of most recent topic assignments");
+    Pair<Double,Double> oldValue = Pair.of(gammaParams[0][0][0], gammaParams[0][0][1]);
+    IterativeOptimizer optimizer = new IterativeOptimizer(ConvergenceCheckers.relativePercentChange(PriorSpecification.HYPERPARAM_LEARNING_CONVERGENCE_THRESHOLD));
+    SymmetricDirichletMultinomialDiagonalMatrixMAPOptimizable o = SymmetricDirichletMultinomialDiagonalMatrixMAPOptimizable.newOptimizable(annotatorConfusions, 2, 2);
+    ValueAndObject<Pair<Double,Double>> optimum = optimizer.optimize(o, ReturnType.HIGHEST, true, oldValue);
+    double newDiag = optimum.getObject().getFirst();
+    double newOffDiag = optimum.getObject().getSecond();
+    for (int j=0; j<numAnnotators(); j++){
+    	for (int k=0; k<numClasses(); k++){
+    		for (int kprime=0; kprime<numClasses(); kprime++){
+    			gammaParams[j][k][kprime] = (k==kprime)? newDiag: newOffDiag;
+    		}
+    	}
+    }
+    // setting priors allows driver class to report settled-on values
+    double newCGamma = newDiag + (numClasses()-1)*newOffDiag;
+    priors.setBGamma(newDiag/newCGamma);
+    priors.setCGamma(newCGamma);
+    logger.info("new bgamma="+optimum.getObject()+" old bgamma="+oldValue);
   }
   
   /** {@inheritDoc} */
