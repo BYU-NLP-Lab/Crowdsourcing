@@ -183,8 +183,10 @@ public class MeanFieldRaykarModel extends AbstractMeanFieldMultiAnnModel {
     this.newvars = tmpvars;
     
     // optimize hypers
-    fitBPhi();
-    fitBGamma();
+    if (priors.getInlineHyperparamTuning()){
+      fitBPhi();
+      fitBGamma();
+    }
   }
   
 

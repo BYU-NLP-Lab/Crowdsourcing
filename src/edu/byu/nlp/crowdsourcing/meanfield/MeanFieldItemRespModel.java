@@ -181,8 +181,10 @@ public class MeanFieldItemRespModel extends AbstractMeanFieldMultiAnnModel {
     this.newvars = tmpvars;
     
     // optimize hyperparams
-    fitBTheta();
-    fitBGamma();
+    if (priors.getInlineHyperparamTuning()){
+      fitBTheta();
+      fitBGamma();
+    }
   }
 
   private double[][][] annotatorConfusions;

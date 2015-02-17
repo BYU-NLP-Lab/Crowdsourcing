@@ -80,9 +80,10 @@ public class ConfusedSLDADiscreteModel {
    */
   public static class State{
     
-    // debugging flags
+    // flags
     private boolean includeMetadataSupervision = false; // if false, reduces to unsupervised LDA
     
+    // data
     private Dataset data;
     private PriorSpecification priors;
     private double[][][] deltas; // prior over gamma (a function of the priors object)
@@ -281,7 +282,7 @@ public class ConfusedSLDADiscreteModel {
       this.yInitializer=yInitializer;
       return this;
     }
-    
+
     public ModelBuilder setNumTopics(int numTopics){
       this.numTopics=numTopics;
       return this;
@@ -750,8 +751,10 @@ public class ConfusedSLDADiscreteModel {
     }
     
     // do inline hyperparameter optimization after z changes
-    updateBTheta(s);
-    updateBPhi(s);
+    if (s.priors.getInlineHyperparamTuning()){
+      updateBTheta(s);
+      updateBPhi(s);
+    }
     
     return numChanges;
   }
@@ -763,8 +766,10 @@ public class ConfusedSLDADiscreteModel {
     }
     
     // do inline hyperparameter optimization after z changes
-    updateBTheta(s);
-    updateBPhi(s);
+    if (s.priors.getInlineHyperparamTuning()){
+      updateBTheta(s);
+      updateBPhi(s);
+    }
     
     return numChanges;
   }
@@ -897,7 +902,9 @@ public class ConfusedSLDADiscreteModel {
     }
     
     // do inline hyperparameter optimization after y changes
-    updateBGamma(s);
+    if (s.priors.getInlineHyperparamTuning()){
+      updateBGamma(s);
+    }
     
     return numChanges;
   }
@@ -907,7 +914,12 @@ public class ConfusedSLDADiscreteModel {
     for (int d=0; d<s.numDocuments; d++){
       numChanges += updateYDoc(s, d, rnd);
     }
-    updateBGamma(s);
+    
+    // do inline hyperparameter optimization after y changes
+    if (s.priors.getInlineHyperparamTuning()){
+      updateBGamma(s);
+    }
+    
     return numChanges;
   }
 

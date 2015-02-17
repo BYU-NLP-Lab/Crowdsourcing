@@ -219,10 +219,12 @@ public class MeanFieldMultiRespModel extends AbstractMeanFieldMultiAnnModel {
     this.newvars = tmpvars;
     
     // optimize hyperparameters
-    fitBTheta();
-    fitBPhi();
-    fitBGamma();
-    // TODO: fit mu hypers?
+    if (priors.getInlineHyperparamTuning()){
+      fitBTheta();
+      fitBPhi();
+      fitBGamma();
+      // TODO: fit mu hypers?
+    }
   }
 
   

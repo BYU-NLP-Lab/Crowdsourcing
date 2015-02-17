@@ -21,6 +21,8 @@ public class PriorSpecification {
 
   public static final double HYPERPARAM_LEARNING_CONVERGENCE_THRESHOLD = 1e-4;
 	
+  private boolean inlineHyperparamTuning;
+  
   private double bTheta;
   private final double bMu;
   private final double cMu;
@@ -33,11 +35,11 @@ public class PriorSpecification {
    * bGamma is only array valued for legacy support. All values of bGamma must be the same. 
    */
   @Deprecated
-  public PriorSpecification(double bTheta, double bMu, double cMu, double[] bGamma, double cGamma, double bPhi) {
-	  this(bTheta, bMu, cMu, bGamma[0], cGamma, bPhi, bGamma.length);
+  public PriorSpecification(double bTheta, double bMu, double cMu, double[] bGamma, double cGamma, double bPhi, boolean inlineHyperparamTuning) {
+	  this(bTheta, bMu, cMu, bGamma[0], cGamma, bPhi, inlineHyperparamTuning, bGamma.length);
   }
   
-  public PriorSpecification(double bTheta, double bMu, double cMu, double bGamma, double cGamma, double bPhi, int numAnnotators) {
+  public PriorSpecification(double bTheta, double bMu, double cMu, double bGamma, double cGamma, double bPhi, boolean inlineHyperparamTuning, int numAnnotators) {
     Preconditions.checkArgument(bTheta > 0.0);
     Preconditions.checkArgument(bMu > 0.0);
     Preconditions.checkArgument(cMu > 0.0);
@@ -52,6 +54,7 @@ public class PriorSpecification {
     this.cGamma = cGamma;
     this.bPhi = bPhi;
     this.numAnnotators=numAnnotators;
+    this.inlineHyperparamTuning=inlineHyperparamTuning;
   }
 
   public double getBTheta() {
@@ -102,4 +105,9 @@ public class PriorSpecification {
   public int getNumAnnotators() {
     return numAnnotators;
   }
+  
+  public boolean getInlineHyperparamTuning(){
+    return inlineHyperparamTuning;
+  }
+  
 }

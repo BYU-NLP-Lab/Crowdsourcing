@@ -190,9 +190,11 @@ public class MeanFieldMomRespModel extends AbstractMeanFieldMultiAnnModel {
     this.newvars = tmpvars;
     
     // optimize hyperparameters wrt current posterior distributions
-    fitBTheta();
-    fitBPhi();
-    fitBGamma();
+    if (priors.getInlineHyperparamTuning()){
+      fitBTheta();
+      fitBPhi();
+      fitBGamma();
+    }
   }
 
 
