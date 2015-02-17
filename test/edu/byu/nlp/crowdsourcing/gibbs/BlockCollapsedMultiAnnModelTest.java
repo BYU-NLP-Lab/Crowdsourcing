@@ -55,7 +55,8 @@ public class BlockCollapsedMultiAnnModelTest {
   private static double B_THETA = 1.0 / 3.0;
   private static double B_MU = 0.75;
   private static double C_MU = 2;
-  private static double[] B_GAMMA = new double[]{0.75, 0.75};
+  private static double B_GAMMA = 0.75;
+  private static int NUM_ANNOTATORS = 2;
   private static double C_GAMMA = 2.0;
   private static double B_PHI = 1.23;
 
@@ -158,10 +159,10 @@ public class BlockCollapsedMultiAnnModelTest {
     ModelBuilder builder = newStubBuilder();
     BlockCollapsedMultiAnnModel model = (BlockCollapsedMultiAnnModel)builder.build();
     
-    double gamma0Diag = B_GAMMA[0] * C_GAMMA;
-    double gamma0Off = (1.0 - B_GAMMA[0]) / 2 * C_GAMMA;
-    double gamma1Diag = B_GAMMA[1] * C_GAMMA;
-    double gamma1Off = (1.0 - B_GAMMA[1]) / 2 * C_GAMMA;
+    double gamma0Diag = B_GAMMA * C_GAMMA;
+    double gamma0Off = (1.0 - B_GAMMA) / 2 * C_GAMMA;
+    double gamma1Diag = B_GAMMA * C_GAMMA;
+    double gamma1Off = (1.0 - B_GAMMA) / 2 * C_GAMMA;
     double muDiag = B_MU * C_MU;
     double muOff = (1.0 - B_MU) / 2.0 * C_MU;
 
@@ -292,7 +293,7 @@ public class BlockCollapsedMultiAnnModelTest {
     RandomGenerator rnd = new MersenneTwister(1);
     
     ModelBuilder builder = (ModelBuilder) new BlockCollapsedMultiAnnModel.ModelBuilder()
-      .setPriors(new PriorSpecification(B_THETA, B_MU, C_MU, new double[]{.75,.75,.75}, C_GAMMA, B_PHI))
+      .setPriors(new PriorSpecification(B_THETA, B_MU, C_MU, .75, C_GAMMA, B_PHI, false, 3))
       .setData(data)
       .setYInitializer(new ModelInitialization.BaselineInitializer(rnd))
       .setMInitializer(new ModelInitialization.BaselineInitializer(rnd))
@@ -338,7 +339,7 @@ public class BlockCollapsedMultiAnnModelTest {
   private ModelBuilder newStubBuilder(double[] lambda) {
     Dataset stubData = TestUtil.stubDataset();
     PriorSpecification stubPriors =
-        new PriorSpecification(B_THETA, B_MU, C_MU, B_GAMMA, C_GAMMA, B_PHI);
+        new PriorSpecification(B_THETA, B_MU, C_MU, B_GAMMA, C_GAMMA, B_PHI, false, NUM_ANNOTATORS);
     int y[] = new int[] {0, 1, 2, 1, 0};
     int m[] = new int[] {0, 0, 1, 2, 0};
     RandomGenerator rnd = new MersenneTwister(1);
@@ -412,10 +413,10 @@ public class BlockCollapsedMultiAnnModelTest {
     assertThat(model.getLogSumCountOfYAndM()).isEqualTo(expectedLogSumCountOfYAndM,
                                                         Delta.delta(1e-14));
     // See above.
-    double diag0 = B_GAMMA[0] * C_GAMMA;
-    double offDiag0 = ((1.0 - B_GAMMA[0]) / (3 /* num_classes) */ - 1)) * C_GAMMA;
-    double diag1 = B_GAMMA[1] * C_GAMMA;
-    double offDiag1 = ((1.0 - B_GAMMA[1]) / (3 /* num_classes) */ - 1)) * C_GAMMA;
+    double diag0 = B_GAMMA * C_GAMMA;
+    double offDiag0 = ((1.0 - B_GAMMA) / (3 /* num_classes) */ - 1)) * C_GAMMA;
+    double diag1 = B_GAMMA * C_GAMMA;
+    double offDiag1 = ((1.0 - B_GAMMA) / (3 /* num_classes) */ - 1)) * C_GAMMA;
     double[][][] expectedCountOfJYAndA = new double[][][] {
         /* Annotator 0 */
         {{diag0 + 1, offDiag0, offDiag0},

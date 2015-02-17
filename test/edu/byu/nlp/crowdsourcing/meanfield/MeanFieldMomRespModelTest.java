@@ -27,7 +27,6 @@ import com.google.common.collect.Maps;
 import edu.byu.nlp.crowdsourcing.CrowdsourcingUtils;
 import edu.byu.nlp.crowdsourcing.PriorSpecification;
 import edu.byu.nlp.data.types.Dataset;
-import edu.byu.nlp.stats.DirichletDistribution;
 import edu.byu.nlp.util.DoubleArrays;
 
 /**
@@ -52,10 +51,10 @@ public class MeanFieldMomRespModelTest {
     double bTheta = rnd.nextDouble();
     double bMu = rnd.nextDouble();
     double cMu = rnd.nextDouble()*10;
-    double[] bAlpha = DirichletDistribution.sample(DoubleArrays.of(1, numAnnotators), rnd);
+    double bAlpha = rnd.nextDouble();
     double cAlpha = rnd.nextDouble()*10;
     double bPhi = rnd.nextDouble();
-    PriorSpecification priors = new PriorSpecification(bTheta, bMu, cMu, bAlpha, cAlpha, bPhi);
+    PriorSpecification priors = new PriorSpecification(bTheta, bMu, cMu, bAlpha, cAlpha, bPhi, false, numAnnotators);
     
     int[][][] a = new int[numInstances][numAnnotators][numClasses];
     for (int i=0; i<numInstances; i++){
