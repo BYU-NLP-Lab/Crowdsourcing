@@ -335,7 +335,7 @@ public class ConfusedSLDADiscreteModel {
       ModelTraining.doOperations(trainingOps, trainer);
 
       logger.info("Training finished with log joint="+unnormalizedLogJoint(state));
-      logger.debug("Topic Results");
+      logger.info("Final topics");
       logTopNWordsPerTopic(state, 10);
       
       return model;
@@ -413,7 +413,7 @@ public class ConfusedSLDADiscreteModel {
           // maximize topics and class labels jointly (SLOW)
           state.includeMetadataSupervision = true;
           maximizeUntilConvergence(state, 0, 0, maxNumIterations); 
-          logTopNWordsPerTopic(state, 10);
+//          logTopNWordsPerTopic(state, 10);
         }
         // Y
         else if (variableName.toLowerCase().equals("y")){ 
@@ -1034,9 +1034,9 @@ public class ConfusedSLDADiscreteModel {
   public static void logTopNWordsPerTopic(State s, int n){
     int topic = 0;
     for (double[] vocab: s.perTopicCountOfVocab){
-      logger.debug("Top "+n+" words for topic "+topic+":");
+      logger.info("Top "+n+" words for topic "+topic+":");
       for (int topIndex: DoubleArrays.argMaxList(n, vocab)){
-        logger.debug("\t"+s.data.getInfo().getFeatureIndexer().get(topIndex)+"="+vocab[topIndex]);
+        logger.info("\t"+s.data.getInfo().getFeatureIndexer().get(topIndex)+"="+vocab[topIndex]);
       }
       topic++;
     }
