@@ -365,7 +365,8 @@ public class ConfusedSLDADiscreteModel {
             sampleY(state, rnd);
             logger.info("sampling topic matrix z");
             sampleZ(state, rnd);
-            // periodically tune hypers and report
+            logger.info("sample Y+Z+B iteration "+i);
+            // periodically tune hypers and report joint
             if ((i+1)%HYPERPARAM_TUNING_PERIOD==0){
               logger.info("sample Y+Z+B iteration "+i+" with (unnormalized) log joint "+unnormalizedLogJoint(state));
               if (state.priors.getInlineHyperparamTuning()){
@@ -382,7 +383,8 @@ public class ConfusedSLDADiscreteModel {
           state.includeMetadataSupervision = false;
           for (int i=0; i<numIterations; i++){
             sampleY(state, rnd);
-            // periodically tune hypers and report
+            logger.info("sample Y iteration "+i);
+            // periodically tune hypers and report joint
             if ((i+1)%HYPERPARAM_TUNING_PERIOD==0){
               logger.info("sample Y iteration "+i+" with (unnormalized) log joint "+unnormalizedLogJoint(state));
               if (state.priors.getInlineHyperparamTuning()){
@@ -397,7 +399,8 @@ public class ConfusedSLDADiscreteModel {
           state.includeMetadataSupervision = false;
           for (int i=0; i<numIterations; i++){
             sampleZ(state, rnd);
-            // periodically tune hypers and report
+            logger.info("sample Z iteration "+i);
+            // periodically tune hypers and report joint
             if ((i+1)%HYPERPARAM_TUNING_PERIOD==0){
               logger.info("sample Z iteration "+i+" with (unnormalized) log joint "+unnormalizedLogJoint(state));
               if (state.priors.getInlineHyperparamTuning()){
@@ -901,6 +904,8 @@ public class ConfusedSLDADiscreteModel {
       logger.info("maximizing inferred labels Y");
       numChanges = maximizeY(s); // set inferred label values
       logger.info("maximizing Y iteration "+iterations+" with "+numChanges+" changes and (unnormalized) joint "+unnormalizedLogJoint(s));
+      // update hyperparam
+      updateBGamma(s);
       iterations++;
     }
     logger.info("finished maximizing Y after "+iterations+" iterations");
@@ -911,12 +916,6 @@ public class ConfusedSLDADiscreteModel {
     for (int d=0; d<s.numDocuments; d++){
       numChanges += updateYDoc(s, d, null);
     }
-    
-    // do inline hyperparameter optimization after y changes
-    if (s.priors.getInlineHyperparamTuning()){
-      updateBGamma(s);
-    }
-    
     return numChanges;
   }
   
@@ -925,12 +924,6 @@ public class ConfusedSLDADiscreteModel {
     for (int d=0; d<s.numDocuments; d++){
       numChanges += updateYDoc(s, d, rnd);
     }
-    
-    // do inline hyperparameter optimization after y changes
-    if (s.priors.getInlineHyperparamTuning()){
-      updateBGamma(s);
-    }
-    
     return numChanges;
   }
 
