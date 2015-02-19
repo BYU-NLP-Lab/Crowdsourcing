@@ -37,6 +37,7 @@ import edu.byu.nlp.dataset.SparseFeatureVectors;
 import edu.byu.nlp.math.SparseRealMatrices;
 import edu.byu.nlp.util.DoubleArrays;
 import edu.byu.nlp.util.Enumeration;
+import edu.byu.nlp.util.IntArrays;
 import edu.byu.nlp.util.Iterables2;
 import edu.byu.nlp.util.Matrices;
 
@@ -410,8 +411,14 @@ public class MultiAnnModelBuilders {
   }
 
   public static MultiAnnModelBuilder initModelBuilderWithSerializedChains(MultiAnnModelBuilder builder, 
-      PriorSpecification priors, Dataset data, int[][] yChains, int[][] mChains,
+      PriorSpecification priors, Dataset data, int[][][] chains,
       RandomGenerator rnd) {
+    Preconditions.checkNotNull(chains);
+    Preconditions.checkArgument(chains.length>0);
+    Preconditions.checkArgument(chains[0].length>0);
+    int[][] yChains = Matrices.selectSecondDimension(chains,0);
+    // if no mChains specified, re-use yChains
+    int[][] mChains = (chains[0].length>1)? Matrices.selectSecondDimension(chains,1): yChains; 
     AssignmentInitializer yInitializer = new MaxMarginalInitializer(yChains,
         data.getInfo().getNumClasses());
     AssignmentInitializer mInitializer = new MaxMarginalInitializer(mChains,

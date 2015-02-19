@@ -31,6 +31,7 @@ import edu.byu.nlp.data.types.DatasetInstance;
 import edu.byu.nlp.dataset.Datasets;
 import edu.byu.nlp.stats.DirichletDistribution;
 import edu.byu.nlp.util.IntArrayCounter;
+import edu.byu.nlp.util.Matrices;
 
 /**
  * @author rah67
@@ -40,6 +41,40 @@ public class ModelInitialization {
   
   public interface AccuracyInitializer {
     void initializeLogAccuracies(double[][] logAccuracies);
+  }
+  
+  public interface MatrixAssignmentInitializer{
+    void setData(Dataset data, Map<String,Integer> instanceIndices);
+    AssignmentInitializer getInitializerFor(int row);
+  }
+
+  public static MatrixAssignmentInitializer uniformRowMatrixInitializer(final AssignmentInitializer delegate){
+    return new MatrixAssignmentInitializer() {
+      @Override
+      public void setData(Dataset data, Map<String, Integer> instanceIndices) {
+        delegate.setData(data, instanceIndices);
+      }
+      @Override
+      public AssignmentInitializer getInitializerFor(int row) {
+        return delegate;
+      }
+    };
+  }
+
+  /**
+   * Assumes that matrices are indexed by [chain][variable][value]. So max marginals should 
+   * select a single variable (second dimension).
+   */
+  public static MatrixAssignmentInitializer maxMarginalMatrixInitializer(final int[][][] chains, final int numValues){
+    return new MatrixAssignmentInitializer() {
+      @Override
+      public void setData(Dataset data, Map<String, Integer> instanceIndices) {
+      }
+      @Override
+      public AssignmentInitializer getInitializerFor(int row) {
+        return new MaxMarginalInitializer(Matrices.selectSecondDimension(chains, row), numValues);
+      }
+    };
   }
   
   public interface AssignmentInitializer {
@@ -172,15 +207,15 @@ public class ModelInitialization {
    */
   public static class MaxMarginalInitializer implements AssignmentInitializer {
     private int[][] var;
-    private int numLabels;
+    private int numValues;
 
-    public MaxMarginalInitializer(int[] var, int numLabels) {
-      this(new int[][] { var }, numLabels);
+    public MaxMarginalInitializer(int[] var, int numValues) {
+      this(new int[][] { var }, numValues);
     }
 
     public MaxMarginalInitializer(int[][] var, int numLabels) {
       this.var = var;
-      this.numLabels = numLabels;
+      this.numValues = numLabels;
     }
 
     /**
@@ -190,7 +225,7 @@ public class ModelInitialization {
     @Override
     public void initialize(int[] assignments) {
       // calculate marginals
-      IntArrayCounter counter = new IntArrayCounter(assignments.length, numLabels);
+      IntArrayCounter counter = new IntArrayCounter(assignments.length, numValues);
       for (int sample = 0; sample < var.length; sample++) {
         for (int v = 0; v < assignments.length; v++) {
           counter.increment(v, var[sample][v]);

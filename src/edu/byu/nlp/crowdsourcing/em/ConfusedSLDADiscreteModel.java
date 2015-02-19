@@ -15,6 +15,7 @@
  */
 package edu.byu.nlp.crowdsourcing.em;
 
+import java.io.PrintWriter;
 import java.util.List;
 import java.util.Map;
 
@@ -33,6 +34,7 @@ import cc.mallet.types.LabelAlphabet;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
+import com.google.gson.Gson;
 
 import edu.byu.nlp.classify.eval.BasicPrediction;
 import edu.byu.nlp.classify.eval.Prediction;
@@ -41,7 +43,9 @@ import edu.byu.nlp.classify.util.ModelTraining;
 import edu.byu.nlp.classify.util.ModelTraining.SupportsTrainingOperations;
 import edu.byu.nlp.crowdsourcing.CrowdsourcingUtils;
 import edu.byu.nlp.crowdsourcing.ModelInitialization.AssignmentInitializer;
+import edu.byu.nlp.crowdsourcing.ModelInitialization.MatrixAssignmentInitializer;
 import edu.byu.nlp.crowdsourcing.PriorSpecification;
+import edu.byu.nlp.crowdsourcing.em.ConfusedSLDADiscreteModel.ModelBuilder;
 import edu.byu.nlp.crowdsourcing.gibbs.BlockCollapsedMultiAnnModelMath;
 import edu.byu.nlp.data.types.Dataset;
 import edu.byu.nlp.data.types.DatasetInstance;
@@ -135,7 +139,7 @@ public class ConfusedSLDADiscreteModel {
       this.numTopics=numTopics;
       this.y = new int[numDocuments];
       this.z = Datasets.featureVectors2FeatureSequences(data); // this gives us the right dimensions
-      IntArrays.multiplyAndRoundToSelf(this.z, 0); // this gives right values
+      Matrices.multiplyAndRoundToSelf(this.z, 0); // initialize values to 0
       // pre-compute static data-derived values
       this.instanceIndices = Datasets.instanceIndices(data);
       this.a = Datasets.compileDenseAnnotations(data);
@@ -265,15 +269,16 @@ public class ConfusedSLDADiscreteModel {
     private int numTopics;
     private PriorSpecification priors;
     private AssignmentInitializer yInitializer;
-    private AssignmentInitializer zInitializer;
+    private MatrixAssignmentInitializer zInitializer;
     private String trainingOps;
     private RandomGenerator rnd;
+    private PrintWriter serializeOut;
 
     public ModelBuilder(Dataset dataset){
       this.data=dataset;
     }
 
-    public ModelBuilder setZInitializer(AssignmentInitializer zInitializer){
+    public ModelBuilder setZInitializer(MatrixAssignmentInitializer zInitializer){
       this.zInitializer=zInitializer;
       return this;
     }
@@ -314,7 +319,7 @@ public class ConfusedSLDADiscreteModel {
       yInitializer.initialize(state.y);
       zInitializer.setData(data, state.instanceIndices);
       for (int d=0; d<state.numDocuments; d++){
-        zInitializer.initialize(state.z[d]);
+        zInitializer.getInitializerFor(d).initialize(state.z[d]);
       }
       // initialize sufficient statistics
       state.updateSufficientStatistics();
@@ -337,6 +342,9 @@ public class ConfusedSLDADiscreteModel {
       logger.info("Training finished with log joint="+unnormalizedLogJoint(state));
       logger.info("Final topics");
       logTopNWordsPerTopic(state, 10);
+      
+      // serialize model
+      serializeChain(state, serializeOut);
       
       return model;
       
@@ -367,7 +375,7 @@ public class ConfusedSLDADiscreteModel {
             sampleZ(state, rnd);
             logger.info("sample Y+Z+B iteration "+i);
             // periodically tune hypers and report joint
-            if ((i+1)%HYPERPARAM_TUNING_PERIOD==0){
+            if (i%HYPERPARAM_TUNING_PERIOD==0){
               logger.info("sample Y+Z+B iteration "+i+" with (unnormalized) log joint "+unnormalizedLogJoint(state));
               if (state.priors.getInlineHyperparamTuning()){
                 updateBTheta(state);
@@ -385,7 +393,7 @@ public class ConfusedSLDADiscreteModel {
             sampleY(state, rnd);
             logger.info("sample Y iteration "+i);
             // periodically tune hypers and report joint
-            if ((i+1)%HYPERPARAM_TUNING_PERIOD==0){
+            if (i%HYPERPARAM_TUNING_PERIOD==0){
               logger.info("sample Y iteration "+i+" with (unnormalized) log joint "+unnormalizedLogJoint(state));
               if (state.priors.getInlineHyperparamTuning()){
                 updateBGamma(state);
@@ -401,7 +409,7 @@ public class ConfusedSLDADiscreteModel {
             sampleZ(state, rnd);
             logger.info("sample Z iteration "+i);
             // periodically tune hypers and report joint
-            if ((i+1)%HYPERPARAM_TUNING_PERIOD==0){
+            if (i%HYPERPARAM_TUNING_PERIOD==0){
               logger.info("sample Z iteration "+i+" with (unnormalized) log joint "+unnormalizedLogJoint(state));
               if (state.priors.getInlineHyperparamTuning()){
                 updateBTheta(state);
@@ -455,6 +463,11 @@ public class ConfusedSLDADiscreteModel {
         }
       }
       
+    }
+
+    public ModelBuilder setSerializeOut(PrintWriter serializeOut) {
+      this.serializeOut=serializeOut;
+      return this;
     }
     
   } // end builder
@@ -1096,4 +1109,9 @@ public class ConfusedSLDADiscreteModel {
     addPriorsToCounts(s);
     logger.info("new bgamma="+optimum.getObject()+" old bgamma="+oldValue);
   }
+  
+  private static void serializeChain(State s, PrintWriter out){
+    out.write(new Gson().toJson(s.z));
+  }
+  
 }

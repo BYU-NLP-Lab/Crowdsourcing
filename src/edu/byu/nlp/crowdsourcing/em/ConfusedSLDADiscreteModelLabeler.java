@@ -15,11 +15,14 @@
  */
 package edu.byu.nlp.crowdsourcing.em;
 
+import java.io.PrintWriter;
+
 import org.apache.commons.math3.random.RandomGenerator;
 
 import edu.byu.nlp.classify.data.DatasetLabeler;
 import edu.byu.nlp.classify.eval.Predictions;
 import edu.byu.nlp.crowdsourcing.ModelInitialization.AssignmentInitializer;
+import edu.byu.nlp.crowdsourcing.ModelInitialization.MatrixAssignmentInitializer;
 import edu.byu.nlp.crowdsourcing.PriorSpecification;
 import edu.byu.nlp.data.types.Dataset;
 
@@ -32,7 +35,8 @@ public class ConfusedSLDADiscreteModelLabeler implements DatasetLabeler{
   private RandomGenerator rnd;
   private ConfusedSLDADiscreteModel model;
 
-  public ConfusedSLDADiscreteModelLabeler(Dataset data, int numTopics, String trainingOps, AssignmentInitializer zInitializer, AssignmentInitializer yInitializer, PriorSpecification priors, RandomGenerator rnd){
+  public ConfusedSLDADiscreteModelLabeler(Dataset data, int numTopics, String trainingOps, MatrixAssignmentInitializer zInitializer, AssignmentInitializer yInitializer, 
+      PriorSpecification priors, PrintWriter serializeOut, RandomGenerator rnd){
     this.rnd=rnd;
     this.model = new ConfusedSLDADiscreteModel.ModelBuilder(data)
         .setNumTopics(numTopics)
@@ -41,6 +45,7 @@ public class ConfusedSLDADiscreteModelLabeler implements DatasetLabeler{
         .setYInitializer(yInitializer)
         .setZInitializer(zInitializer)
         .setTrainingOps(trainingOps)
+        .setSerializeOut(serializeOut)
         .build();
   }
   
