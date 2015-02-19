@@ -538,7 +538,9 @@ public class ConfusedSLDADiscreteModel {
       }
       
       // train
-      return new MaxEntTrainer(s.maxent).train(trainingSet);
+      MaxEntTrainer trainer = new MaxEntTrainer(s.maxent);
+      trainer.setGaussianPriorVariance(s.priors.getEtaVariance());
+      return trainer.train(trainingSet);
     }
     
     /**

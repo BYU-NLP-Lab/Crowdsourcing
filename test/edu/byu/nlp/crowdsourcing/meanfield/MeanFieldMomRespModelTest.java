@@ -54,7 +54,7 @@ public class MeanFieldMomRespModelTest {
     double bAlpha = rnd.nextDouble();
     double cAlpha = rnd.nextDouble()*10;
     double bPhi = rnd.nextDouble();
-    PriorSpecification priors = new PriorSpecification(bTheta, bMu, cMu, bAlpha, cAlpha, bPhi, false, numAnnotators);
+    PriorSpecification priors = new PriorSpecification(bTheta, bMu, cMu, bAlpha, cAlpha, bPhi, -1, false, numAnnotators);
     
     int[][][] a = new int[numInstances][numAnnotators][numClasses];
     for (int i=0; i<numInstances; i++){

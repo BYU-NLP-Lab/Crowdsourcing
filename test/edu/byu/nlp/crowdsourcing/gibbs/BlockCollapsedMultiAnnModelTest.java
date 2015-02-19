@@ -293,7 +293,7 @@ public class BlockCollapsedMultiAnnModelTest {
     RandomGenerator rnd = new MersenneTwister(1);
     
     ModelBuilder builder = (ModelBuilder) new BlockCollapsedMultiAnnModel.ModelBuilder()
-      .setPriors(new PriorSpecification(B_THETA, B_MU, C_MU, .75, C_GAMMA, B_PHI, false, 3))
+      .setPriors(new PriorSpecification(B_THETA, B_MU, C_MU, .75, C_GAMMA, B_PHI, -1, false, 3))
       .setData(data)
       .setYInitializer(new ModelInitialization.BaselineInitializer(rnd))
       .setMInitializer(new ModelInitialization.BaselineInitializer(rnd))
@@ -339,7 +339,7 @@ public class BlockCollapsedMultiAnnModelTest {
   private ModelBuilder newStubBuilder(double[] lambda) {
     Dataset stubData = TestUtil.stubDataset();
     PriorSpecification stubPriors =
-        new PriorSpecification(B_THETA, B_MU, C_MU, B_GAMMA, C_GAMMA, B_PHI, false, NUM_ANNOTATORS);
+        new PriorSpecification(B_THETA, B_MU, C_MU, B_GAMMA, C_GAMMA, B_PHI, -1, false, NUM_ANNOTATORS);
     int y[] = new int[] {0, 1, 2, 1, 0};
     int m[] = new int[] {0, 0, 1, 2, 0};
     RandomGenerator rnd = new MersenneTwister(1);

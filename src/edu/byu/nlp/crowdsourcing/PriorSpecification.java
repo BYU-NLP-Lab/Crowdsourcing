@@ -23,6 +23,7 @@ public class PriorSpecification {
 	
   private boolean inlineHyperparamTuning;
   
+  private double etaVariance;
   private double bTheta;
   private final double bMu;
   private final double cMu;
@@ -34,12 +35,7 @@ public class PriorSpecification {
   /**
    * bGamma is only array valued for legacy support. All values of bGamma must be the same. 
    */
-  @Deprecated
-  public PriorSpecification(double bTheta, double bMu, double cMu, double[] bGamma, double cGamma, double bPhi, boolean inlineHyperparamTuning) {
-	  this(bTheta, bMu, cMu, bGamma[0], cGamma, bPhi, inlineHyperparamTuning, bGamma.length);
-  }
-  
-  public PriorSpecification(double bTheta, double bMu, double cMu, double bGamma, double cGamma, double bPhi, boolean inlineHyperparamTuning, int numAnnotators) {
+  public PriorSpecification(double bTheta, double bMu, double cMu, double bGamma, double cGamma, double bPhi, double etaVariance, boolean inlineHyperparamTuning, int numAnnotators) {
     Preconditions.checkArgument(bTheta > 0.0);
     Preconditions.checkArgument(bMu > 0.0);
     Preconditions.checkArgument(cMu > 0.0);
@@ -53,6 +49,7 @@ public class PriorSpecification {
     this.bGamma = bGamma;
     this.cGamma = cGamma;
     this.bPhi = bPhi;
+    this.etaVariance=etaVariance;
     this.numAnnotators=numAnnotators;
     this.inlineHyperparamTuning=inlineHyperparamTuning;
   }
@@ -100,6 +97,10 @@ public class PriorSpecification {
   
   public void setBPhi(double bPhi){
     this.bPhi=bPhi;
+  }
+  
+  public double getEtaVariance(){
+    return etaVariance;
   }
 
   public int getNumAnnotators() {
