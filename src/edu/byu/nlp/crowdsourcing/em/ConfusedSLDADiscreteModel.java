@@ -75,6 +75,12 @@ public class ConfusedSLDADiscreteModel {
   private static final int DEFAULT_TRAINING_ITERATIONS = 25;
   private static final int HYPERPARAM_TUNING_PERIOD = 25;
   
+  //TODO: the static eta matrix implementation is not totally debugged yet. 
+  // bad smells: 1) topic correspondence doesn't always work even with many perfect annotations
+  //             2) accuracy on unannotated data is abysmal. I'd think it would be at least ok for good data. 
+  // both of these things together suggest that class identity is getting swapped somewhere??
+  private static final boolean STATIC_ETA = false; 
+  
   //////////////////////////////////////////////
   // Helper Code
   //////////////////////////////////////////////
@@ -580,7 +586,7 @@ public class ConfusedSLDADiscreteModel {
       return DoubleArrays.extend(zbar, 1);
     }
 
-    public static double getParameter(int documentClass, int topic, State s) {
+    public static double getEtaElement(int documentClass, int topic, State s) {
       int rowPos = documentClass*(s.numTopics+1);
       int pos = rowPos + topic;
       return s.maxent.getParameters()[pos];
@@ -592,7 +598,7 @@ public class ConfusedSLDADiscreteModel {
      * b
      * Note that topics are playing the role of features here
      */
-    public static double[] getParameters(int documentClass, State s) {
+    public static double[] getEtaRow(int documentClass, State s) {
       int length = s.numTopics+1;
       double[] parameters = new double[length];
       int srcPos = documentClass*(length);
@@ -604,12 +610,12 @@ public class ConfusedSLDADiscreteModel {
      * Get the weights w from the underlying log-linear model as a double[class][feature].
      * The final entry of each row (i.e., w[class][numFeatures]) is the class bias weight.
      */
-    public static double[][] getParameterMatrix(State s){
+    public static double[][] getEta(State s){
       Preconditions.checkState(s.maxent.getNumParameters()==s.numClasses*s.numTopics+s.numClasses);
       Preconditions.checkState(s.maxent.getDefaultFeatureIndex()==s.numTopics);
       double[][] maxLambda = new double[s.numClasses][]; // +1 accounts for class bias term
       for (int k=0; k<s.numClasses; k++){
-        maxLambda[k] = getParameters(k, s);
+        maxLambda[k] = getEtaRow(k, s);
       }
       return maxLambda;
     }
@@ -812,19 +818,22 @@ public class ConfusedSLDADiscreteModel {
     int docsize = s.docSizes[doc];
     int documentClass = s.y[doc];
     
-    // precompute and cache metadata scores for each topic 
-    // (they are invariant wrt words)
-    for (int t=0; t<s.numTopics; t++){
-      double numerator = Math.exp(MalletInterface.getParameter(documentClass,t,s)/(s.docSizes[doc]));
-      // extend zbar with a bias term on the end always set to 1 (see MalletInterface.getParameters())
-      double[] zzbar = MalletInterface.zbar(s.perDocumentCountOfTopic[doc], s.docSizes[doc], s.priors.getBTheta()); 
-      double denominator = 0;
-      for (int c=0; c<s.numClasses; c++){
-        double dotprod = (MalletInterface.getParameter(c,t,s)/s.docSizes[doc]) + DoubleArrays.dotProduct(MalletInterface.getParameters(c,s),zzbar);
-        denominator += Math.exp(dotprod / s.docSizes[doc]); 
+    
+    if (s.includeMetadataSupervision){
+      // precompute and cache metadata scores for each topic 
+      // (they are invariant wrt words)
+      for (int t=0; t<s.numTopics; t++){
+        double numerator = Math.exp(MalletInterface.getEtaElement(documentClass,t,s)/(s.docSizes[doc]));
+        // extend zbar with a bias term on the end always set to 1 (see MalletInterface.getParameters())
+        double[] zzbar = MalletInterface.zbar(s.perDocumentCountOfTopic[doc], s.docSizes[doc], s.priors.getBTheta()); 
+        double denominator = 0;
+        for (int c=0; c<s.numClasses; c++){
+          double dotprod = (MalletInterface.getEtaElement(c,t,s)/s.docSizes[doc]) + DoubleArrays.dotProduct(MalletInterface.getEtaRow(c,s),zzbar);
+          denominator += Math.exp(dotprod / s.docSizes[doc]); 
+        }
+        
+        s.cachedMetadataScores[t] = numerator/denominator;
       }
-      
-      s.cachedMetadataScores[t] = numerator/denominator;
     }
     
     // do update
@@ -999,10 +1008,32 @@ public class ConfusedSLDADiscreteModel {
   // Code to Optimize w (logistic regression)
   // (mutates model state in-place for efficiency)
   /////////////////////////////////////////////////
+  private static double[] staticEtaParameters;
   public static void maximizeB(State s){
-    // retrain a maxent model between per-document topic vectors 
-    // and class labels.
-    s.maxent = MalletInterface.logisticRegressionFromTopicToClass(s);
+    if (STATIC_ETA){
+      
+      if (staticEtaParameters==null){
+        // initialize the maxent model (don't know how to do this without going through training once)
+        s.maxent = MalletInterface.logisticRegressionFromTopicToClass(s);
+        
+        staticEtaParameters = new double[s.numClasses*(s.numTopics+1)];
+        for (int k=0; k<s.numClasses; k++){
+          for (int t=0; t<s.numTopics; t++){
+            staticEtaParameters[k*(s.numTopics+1)+t] = (k==t)? 1: 0;
+          }
+          // staticEtaMapping[(k*s.numTopics+1)+s.numTopics] = 0; // bias term remains 0
+        }
+      // instead of regular maximization we will force a 1-1 mapping between 
+      // classes and the first K topics. The rest of the topics are allowed to 
+      // float in an entirely unsupervised manner to handle nuisance words/topics. 
+      s.maxent.setParameters(staticEtaParameters);
+      }
+    }
+    else{
+      // retrain a maxent model between per-document topic vectors 
+      // and class labels.
+      s.maxent = MalletInterface.logisticRegressionFromTopicToClass(s);
+    }
   }
   
   
@@ -1053,6 +1084,9 @@ public class ConfusedSLDADiscreteModel {
   public static void logTopNWordsPerTopic(State s, int n){
     int topic = 0;
     for (double[] vocab: s.perTopicCountOfVocab){
+      if (STATIC_ETA && topic<s.numClasses){
+        logger.info("topic "+topic+" corresponds to class "+s.data.getInfo().getLabelIndexer().get(topic));
+      }
       logger.info("Top "+n+" words for topic "+topic+":");
       for (int topIndex: DoubleArrays.argMaxList(n, vocab)){
         logger.info("\t"+s.data.getInfo().getFeatureIndexer().get(topIndex)+"="+vocab[topIndex]);
