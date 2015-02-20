@@ -45,7 +45,6 @@ import edu.byu.nlp.crowdsourcing.CrowdsourcingUtils;
 import edu.byu.nlp.crowdsourcing.ModelInitialization.AssignmentInitializer;
 import edu.byu.nlp.crowdsourcing.ModelInitialization.MatrixAssignmentInitializer;
 import edu.byu.nlp.crowdsourcing.PriorSpecification;
-import edu.byu.nlp.crowdsourcing.em.ConfusedSLDADiscreteModel.ModelBuilder;
 import edu.byu.nlp.crowdsourcing.gibbs.BlockCollapsedMultiAnnModelMath;
 import edu.byu.nlp.data.types.Dataset;
 import edu.byu.nlp.data.types.DatasetInstance;
@@ -111,6 +110,7 @@ public class ConfusedSLDADiscreteModel {
     // static data-derived values
     private int[][][] a; // annotations indexed by [document][annotator][annotation_value]
     private int[] docSizes; // N_d: num words in dth doc. Derived from data. 
+    private int[] docAnnotationCounts; // number of annotations per doc. Derived from data
     private int[][] documents;  // documents represented as sequences of type indices. 
                                 // indexed by [doc][word_position]. 
 
@@ -134,6 +134,7 @@ public class ConfusedSLDADiscreteModel {
     private final double[] yCoeffs; // stores class probabilities while sampling a y
     private Map<String, Integer> instanceIndices;
 
+
     
     public State(Dataset data, PriorSpecification priors, int numTopics){
       this.data=data;
@@ -149,7 +150,8 @@ public class ConfusedSLDADiscreteModel {
       // pre-compute static data-derived values
       this.instanceIndices = Datasets.instanceIndices(data);
       this.a = Datasets.compileDenseAnnotations(data);
-      this.docSizes = Datasets.integerValuedInstanceSizes(data);
+      this.docSizes = Datasets.countIntegerDocSizes(data);
+      this.docAnnotationCounts = Datasets.countDocAnnotations(data);
       this.documents = Datasets.featureVectors2FeatureSequences(data);
       this.deltas = CrowdsourcingUtils.annotatorConfusionMatricesFromPrior(priors, numClasses);
       // sufficient statistics (derived from y,z)
@@ -535,12 +537,19 @@ public class ConfusedSLDADiscreteModel {
       ensureDataAlphabet(s.numTopics);
       ensureLabelAlphabet(s.numClasses);
       
-      // create a training set by adding each instance K times, each weighted by softlabels
+      // create a training set by adding each instance with its features 
+      // equal to "zbar" (normalized topic vector) and it's label equal to the current y
+      // 
+      // note: (ideally we would add each instance k times, each with its weight according to the sampler distribution
+      // --this would make our EM a little softer)
       InstanceList trainingSet = new InstanceList(dataAlphabet, labelAlphabet);
       for (int doc=0; doc<s.numDocuments; doc++){
-        // note: do soft-EM by maintaining distributions over doc labels?
-        // note: do even softer-EM by maintaining distributions over topic vectors?
-        trainingSet.add(instanceForTopicCounts(s.perDocumentCountOfTopic[doc], null, s.docSizes[doc], s.priors.getBTheta(), s.y[doc]));
+        // Important optimization: skip instances that have 0 annotations, since those y's analytically 
+        // integrate out of the model and we aren't sampling them.
+        if (s.docAnnotationCounts[doc]>0){
+          // note: do even softer-EM by maintaining distributions over topic vectors?
+          trainingSet.add(instanceForTopicCounts(s.perDocumentCountOfTopic[doc], null, s.docSizes[doc], s.priors.getBTheta(), s.y[doc]));
+        }
       }
       
       // train
@@ -668,15 +677,18 @@ public class ConfusedSLDADiscreteModel {
       
       int index = state.instanceIndices.get(inst.getInfo().getSource());
       
-      BasicPrediction prediction = new BasicPrediction(state.y[index], inst);
       
       if (inst.getInfo().getNumAnnotations()>0){
         // annotated
-        labeledPredictions.add(prediction);
+        labeledPredictions.add(new BasicPrediction(state.y[index], inst));
       }
       else{
-        // unannotated
-        unlabeledPredictions.add(prediction);
+        // unannotated - these y's were ignored during inference 
+        // since they are a deterministic function of the z's and 
+        // eta. Calculate them now
+        Instance zbar = MalletInterface.instanceForTopicCounts(state.perDocumentCountOfTopic[index], null, state.docSizes[index], state.priors.getBTheta(), null);
+        state.maxent.getClassificationScores(zbar, state.logisticClassScores);
+        unlabeledPredictions.add(new BasicPrediction(DoubleArrays.argMax(state.logisticClassScores), inst));
       }
     }
     
@@ -818,6 +830,14 @@ public class ConfusedSLDADiscreteModel {
     int docsize = s.docSizes[doc];
     int documentClass = s.y[doc];
     
+    // this is a significant convergence optimization: if this document has 0
+    // annotations, then this document's y variable analytically integrates out
+    // (in the same way as unobserved features in naive bayes). Therefore this becomes 
+    // a vanilla lda sample
+    boolean originalMetadataSupervisionSetting = s.includeMetadataSupervision;
+    if (s.docAnnotationCounts[doc]==0){
+      s.includeMetadataSupervision=false;
+    }
     
     if (s.includeMetadataSupervision){
       // precompute and cache metadata scores for each topic 
@@ -840,6 +860,8 @@ public class ConfusedSLDADiscreteModel {
     for (int word=0; word<docsize; word++){
       numChanges += updateZDocWord(s, doc, word, rnd);
     }
+
+    s.includeMetadataSupervision = originalMetadataSupervisionSetting; // restore original metadata setting (in case we disabled it due to 0 annotations on this doc)
     
     return numChanges;
   }
@@ -956,10 +978,19 @@ public class ConfusedSLDADiscreteModel {
    * the joint. Otherwise, samples. 
    */
   public static int updateYDoc(State s, int doc, RandomGenerator rnd){
+    // as an optimization, don't bother sampling labels for unannotated 
+    // documents--they are deterministic functions of zbar and eta. We 
+    // can calculate that later during the prediction phase. During inference 
+    // we can simply pretend these y's don't exist (they integrate out analytically
+    // in the same way that missing data does in naive bayes). 
+    if (s.docAnnotationCounts[doc]==0){
+      return 0;  
+    }
+    
     // decrement counts using current y value 
     // (full conditionals are defined in terms of excluding current document)
     excludeDocumentFromCounts(s, doc);
-
+    
     if (s.includeMetadataSupervision){
       // precompute for efficiency
       Instance zbar = MalletInterface.instanceForTopicCounts(s.perDocumentCountOfTopic[doc], null, s.docSizes[doc], s.priors.getBTheta(), null);
