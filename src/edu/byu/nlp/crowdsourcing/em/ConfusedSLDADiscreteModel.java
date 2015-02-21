@@ -642,6 +642,18 @@ public class ConfusedSLDADiscreteModel {
     this.state=state;
   }
 
+  public Dataset getData() {
+    return this.state.data;
+  }
+  
+  public int[] getY(){
+    return this.state.y.clone();
+  }
+
+  public int[][] getZ(){
+    return Matrices.clone(this.state.z);
+  }
+
   
   public static void maximizeUntilConvergence(State s, int minNumYChanges, int minNumZChanges, int maxIterations){
     int numYChanges = Integer.MAX_VALUE;
@@ -1179,5 +1191,6 @@ public class ConfusedSLDADiscreteModel {
   private static void serializeChain(State s, PrintWriter out){
     out.write(new Gson().toJson(s.z));
   }
+
   
 }
