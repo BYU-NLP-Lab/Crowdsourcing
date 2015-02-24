@@ -26,9 +26,7 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.Maps;
 
 import edu.byu.nlp.crowdsourcing.ModelInitialization.AssignmentInitializer;
-import edu.byu.nlp.crowdsourcing.ModelInitialization.BaselineInitializer;
 import edu.byu.nlp.crowdsourcing.ModelInitialization.LabeledDataInitializer;
-import edu.byu.nlp.crowdsourcing.ModelInitialization.MaxMarginalInitializer;
 import edu.byu.nlp.data.types.Dataset;
 import edu.byu.nlp.data.types.DatasetInstance;
 import edu.byu.nlp.data.types.SparseFeatureVector;
@@ -37,7 +35,6 @@ import edu.byu.nlp.dataset.SparseFeatureVectors;
 import edu.byu.nlp.math.SparseRealMatrices;
 import edu.byu.nlp.util.DoubleArrays;
 import edu.byu.nlp.util.Enumeration;
-import edu.byu.nlp.util.IntArrays;
 import edu.byu.nlp.util.Iterables2;
 import edu.byu.nlp.util.Matrices;
 
@@ -372,13 +369,13 @@ public class MultiAnnModelBuilders {
 
   
   
-  /**
-   * Initialize a model builder with the same assignment initializer for Y and M
-   */
-  public static MultiAnnModelBuilder initModelBuilder(MultiAnnModelBuilder builder, PriorSpecification priors, Dataset data,
-      AssignmentInitializer assignmentInit, RandomGenerator rnd) {
-    return initModelBuilder(builder, priors, data, assignmentInit, assignmentInit, rnd);
-  }
+//  /**
+//   * Initialize a model builder with the same assignment initializer for Y and M
+//   */
+//  public static MultiAnnModelBuilder initModelBuilder(MultiAnnModelBuilder builder, PriorSpecification priors, Dataset data,
+//      AssignmentInitializer assignmentInit, RandomGenerator rnd) {
+//    return initModelBuilder(builder, priors, data, assignmentInit, assignmentInit, rnd);
+//  }
 
   public static MultiAnnModelBuilder initModelBuilder(MultiAnnModelBuilder builder, 
       PriorSpecification priors, Dataset data,
@@ -392,47 +389,24 @@ public class MultiAnnModelBuilders {
     return builder;
   }
 
-  public static MultiAnnModelBuilder initModelBuilderWithUniform(MultiAnnModelBuilder builder, 
-      PriorSpecification priors, Dataset data, RandomGenerator rnd) {
-    AssignmentInitializer initializer = ModelInitialization
-        .newUniformAssignmentInitializer(data.getInfo().getNumClasses(), rnd);
-    return initModelBuilder(builder, priors, data, initializer, rnd);
-  }
-
-  public static MultiAnnModelBuilder initModelBuilderWithBaselineInit(MultiAnnModelBuilder builder, 
-      PriorSpecification priors, Dataset data, RandomGenerator rnd) {
-    AssignmentInitializer initializer = new BaselineInitializer(rnd);
-//    initModelBuilder(builder, priors, data, initializer, rnd);
-    AssignmentInitializer mInitializer = new BaselineInitializer(rnd, true);
-//    // note (pfelt): the below doesn't perturb m settings according to the prior 
-//    AssignmentInitializer mInitializer = new ModelInitialization.NoisyInitializer(new BaselineInitializer(rnd, true), 1-priors.getBMu(), data.getInfo().getNumClasses(), rnd);
-//    AssignmentInitializer mInitializer = new ModelInitialization.UniformAssignmentInitializer(data.getInfo().getNumClasses(), rnd);
-    return initModelBuilder(builder, priors, data, initializer, mInitializer, rnd);
-  }
-
-  public static MultiAnnModelBuilder initModelBuilderWithSerializedChains(MultiAnnModelBuilder builder, 
-      PriorSpecification priors, Dataset data, int[][][] chains,
-      RandomGenerator rnd) {
-    Preconditions.checkNotNull(chains);
-    Preconditions.checkArgument(chains.length>0);
-    Preconditions.checkArgument(chains[0].length>0);
-    int[][] yChains = Matrices.selectSecondDimension(chains,0);
-    // if no mChains specified, re-use yChains
-    int[][] mChains = (chains[0].length>1)? Matrices.selectSecondDimension(chains,1): yChains; 
-    AssignmentInitializer yInitializer = new MaxMarginalInitializer(yChains,
-        data.getInfo().getNumClasses());
-    AssignmentInitializer mInitializer = new MaxMarginalInitializer(mChains,
-        data.getInfo().getNumClasses());
-    return initModelBuilder(builder, priors, data, yInitializer, mInitializer, rnd);
-  }
-
-//  // Randomly initializes a model for the given dataset. All variables are
-//  // initialized uniform
-//  // randomly. Only uses data in data.unlabeledData().
-//  public static BlockCollapsedMultiAnnModelNeutered newModelWithUniform(
+//  public static MultiAnnModelBuilder initModelBuilderWithUniform(MultiAnnModelBuilder builder, 
 //      PriorSpecification priors, Dataset data, RandomGenerator rnd) {
-//    initModelBuilderWithUniform(priors, data, rnd).build();
+//    AssignmentInitializer initializer = ModelInitialization
+//        .newUniformAssignmentInitializer(data.getInfo().getNumClasses(), rnd);
+//    return initModelBuilder(builder, priors, data, initializer, rnd);
 //  }
+//
+//  public static MultiAnnModelBuilder initModelBuilderWithBaselineInit(MultiAnnModelBuilder builder, 
+//      PriorSpecification priors, Dataset data, RandomGenerator rnd) {
+//    AssignmentInitializer initializer = new BaselineInitializer(rnd);
+////    initModelBuilder(builder, priors, data, initializer, rnd);
+//    AssignmentInitializer mInitializer = new BaselineInitializer(rnd, true);
+////    // note (pfelt): the below doesn't perturb m settings according to the prior 
+////    AssignmentInitializer mInitializer = new ModelInitialization.NoisyInitializer(new BaselineInitializer(rnd, true), 1-priors.getBMu(), data.getInfo().getNumClasses(), rnd);
+////    AssignmentInitializer mInitializer = new ModelInitialization.UniformAssignmentInitializer(data.getInfo().getNumClasses(), rnd);
+//    return initModelBuilder(builder, priors, data, initializer, mInitializer, rnd);
+//  }
+//
 
 
   public static double[][] numAnnsPerJAndY(double[][][] jya) {

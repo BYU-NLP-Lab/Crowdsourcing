@@ -15,26 +15,28 @@
  */
 package edu.byu.nlp.crowdsourcing;
 
+import java.util.List;
 import java.util.Map;
 
 import org.apache.commons.math3.random.RandomGenerator;
 
 import com.google.common.collect.Iterables;
+import com.google.common.collect.Lists;
 
 import edu.byu.nlp.classify.NaiveBayesLearner;
 import edu.byu.nlp.classify.data.DatasetBuilder;
 import edu.byu.nlp.classify.data.SingleLabelLabeler;
 import edu.byu.nlp.classify.eval.Prediction;
 import edu.byu.nlp.classify.eval.Predictions;
+import edu.byu.nlp.crowdsourcing.SerializableCrowdsourcingState.SerializableCrowdsourcingDocumentState;
 import edu.byu.nlp.data.types.Dataset;
 import edu.byu.nlp.data.types.DatasetInstance;
 import edu.byu.nlp.dataset.Datasets;
 import edu.byu.nlp.stats.DirichletDistribution;
-import edu.byu.nlp.util.IntArrayCounter;
-import edu.byu.nlp.util.Matrices;
 
 /**
  * @author rah67
+ * @author plf1
  *
  */
 public class ModelInitialization {
@@ -61,22 +63,6 @@ public class ModelInitialization {
     };
   }
 
-  /**
-   * Assumes that matrices are indexed by [chain][variable][value]. So max marginals should 
-   * select a single variable (second dimension).
-   */
-  public static MatrixAssignmentInitializer maxMarginalMatrixInitializer(final int[][][] chains, final int numValues){
-    return new MatrixAssignmentInitializer() {
-      @Override
-      public void setData(Dataset data, Map<String, Integer> instanceIndices) {
-      }
-      @Override
-      public AssignmentInitializer getInitializerFor(int row) {
-        return new MaxMarginalInitializer(Matrices.selectSecondDimension(chains, row), numValues);
-      }
-    };
-  }
-  
   public interface AssignmentInitializer {
     void setData(Dataset data, Map<String,Integer> instanceIndices);
     void initialize(int[] assignments);
@@ -202,43 +188,81 @@ public class ModelInitialization {
   } // end class BaselineInitializer
 
 
-  /**
-   * Takes the max vote for each element from parallel int arrays
-   */
-  public static class MaxMarginalInitializer implements AssignmentInitializer {
-    private int[][] var;
-    private int numValues;
+  public static class SerializedZInitializer implements MatrixAssignmentInitializer {
+	private List<DatasetInstance> instances;
+	private SerializableCrowdsourcingState serializedState;
+	public SerializedZInitializer(SerializableCrowdsourcingState serializedState){
+		this.serializedState=serializedState;
+	}
+	@Override
+	public void setData(Dataset data, Map<String, Integer> instanceIndices) {
+		this.instances = Lists.newArrayList(data);
+	}
+	@Override
+	public AssignmentInitializer getInitializerFor(final int docIndex) {
+		final String docSrc = instances.get(docIndex).getInfo().getSource();
+		return new AssignmentInitializer() {
+			@Override
+			public void setData(Dataset data, Map<String, Integer> instanceIndices) {}
+			@Override
+			public void initialize(int[] assignments) {
+				int[] serializedAssignments = serializedState.getDocument(docSrc).getZ();
+				for (int z=0; z<assignments.length; z++){
+					assignments[z] = serializedAssignments[z];
+				}
+			}
+		};
+	}
+	  
+  }
+  
+  public static class SerializedYInitializer implements AssignmentInitializer {
+	private Map<String, Integer> instanceIndices;
+	private Dataset data;
+	private SerializableCrowdsourcingState serializedState;
+	public SerializedYInitializer(SerializableCrowdsourcingState serializedState){
+		this.serializedState=serializedState;
+	}
+	@Override
+	public void setData(Dataset data, Map<String, Integer> instanceIndices) {
+		this.data=data;
+		this.instanceIndices=instanceIndices;
+	}
+	@Override
+	public void initialize(int[] assignments) {
+		for (DatasetInstance inst: data){
+			String src = inst.getInfo().getSource();
+			SerializableCrowdsourcingDocumentState docState = serializedState.getDocument(src);
+			int index = instanceIndices.get(src);
+			assignments[index] = docState.getY(); 
+		}
+	}
+  }
 
-    public MaxMarginalInitializer(int[] var, int numValues) {
-      this(new int[][] { var }, numValues);
-    }
-
-    public MaxMarginalInitializer(int[][] var, int numLabels) {
-      this.var = var;
-      this.numValues = numLabels;
-    }
-
-    /**
-     * We have multiple prior samples. Assign the max marginal assignment to
-     * each variable
-     */
-    @Override
-    public void initialize(int[] assignments) {
-      // calculate marginals
-      IntArrayCounter counter = new IntArrayCounter(assignments.length, numValues);
-      for (int sample = 0; sample < var.length; sample++) {
-        for (int v = 0; v < assignments.length; v++) {
-          counter.increment(v, var[sample][v]);
-        }
-      }
-      // assign maxes
-      for (int v = 0; v < assignments.length; v++) {
-        assignments[v] = counter.argmax(v);
-      }
-    }
-    @Override
-    public void setData(Dataset data, Map<String,Integer> instanceIndices) {}
-  } // end class MaxMarginalInitializer
+  
+  public static class SerializedMInitializer implements AssignmentInitializer {
+	private Map<String, Integer> instanceIndices;
+	private Dataset data;
+	private SerializableCrowdsourcingState serializedState;
+	public SerializedMInitializer(SerializableCrowdsourcingState serializedState){
+		this.serializedState=serializedState;
+	}
+	@Override
+	public void setData(Dataset data, Map<String, Integer> instanceIndices) {
+		this.data=data;
+		this.instanceIndices=instanceIndices;
+	}
+	@Override
+	public void initialize(int[] assignments) {
+		for (DatasetInstance inst: data){
+			String src = inst.getInfo().getSource();
+			SerializableCrowdsourcingDocumentState docState = serializedState.getDocument(src);
+			int index = instanceIndices.get(src);
+			assignments[index] = docState.getM(); 
+		}
+	}
+  }
+  
 
   public static class LabeledDataInitializer implements AssignmentInitializer {
     private Dataset data;
@@ -285,4 +309,47 @@ public class ModelInitialization {
     }
   }
   
+
+  /**
+   * Either create a state initializer, or if the state has no values for Y, return the provided backoff initializer
+   */
+  public static AssignmentInitializer backoffStateInitializerForY(SerializableCrowdsourcingState state, AssignmentInitializer backoffInitializer){
+    AssignmentInitializer yInitializer;
+    if (state!=null && state.hasY()){
+    	yInitializer = new ModelInitialization.SerializedYInitializer(state);
+    }
+    else{
+    	yInitializer = backoffInitializer;
+    }
+    return yInitializer;
+  }
+
+  /**
+   * Either create a state initializer, or if the state has no values for M, return the provided backoff initializer
+   */
+  public static AssignmentInitializer backoffStateInitializerForM(SerializableCrowdsourcingState state, AssignmentInitializer backoffInitializer){
+    AssignmentInitializer mInitializer;
+    if (state!=null && state.hasM()){
+    	mInitializer = new ModelInitialization.SerializedMInitializer(state);
+    }
+    else{
+    	mInitializer = backoffInitializer;
+    }
+    return mInitializer;
+  }
+
+  /**
+   * Either create a state initializer, or if the state has no values for Z, return the provided backoff initializer
+   */
+  public static MatrixAssignmentInitializer backoffStateInitializerForZ(SerializableCrowdsourcingState state, MatrixAssignmentInitializer backoffInitializer){
+	  MatrixAssignmentInitializer zInitializer;
+    if (state!=null && state.hasZ()){
+    	zInitializer = new ModelInitialization.SerializedZInitializer(state);
+    }
+    else{
+    	zInitializer = backoffInitializer;
+    }
+    return zInitializer;
+  }
+
 }

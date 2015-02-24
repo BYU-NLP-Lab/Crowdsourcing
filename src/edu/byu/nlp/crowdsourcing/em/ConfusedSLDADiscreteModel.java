@@ -15,7 +15,6 @@
  */
 package edu.byu.nlp.crowdsourcing.em;
 
-import java.io.PrintWriter;
 import java.util.List;
 import java.util.Map;
 
@@ -34,7 +33,6 @@ import cc.mallet.types.LabelAlphabet;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
-import com.google.gson.Gson;
 
 import edu.byu.nlp.classify.eval.BasicPrediction;
 import edu.byu.nlp.classify.eval.Prediction;
@@ -280,7 +278,6 @@ public class ConfusedSLDADiscreteModel {
     private MatrixAssignmentInitializer zInitializer;
     private String trainingOps;
     private RandomGenerator rnd;
-    private PrintWriter serializeOut;
 
     public ModelBuilder(Dataset dataset){
       this.data=dataset;
@@ -350,9 +347,6 @@ public class ConfusedSLDADiscreteModel {
       logger.info("Training finished with log joint="+unnormalizedLogJoint(state));
       logger.info("Final topics");
       logTopNWordsPerTopic(state, 10);
-      
-      // serialize model
-      serializeChain(state, serializeOut);
       
       return model;
       
@@ -472,11 +466,6 @@ public class ConfusedSLDADiscreteModel {
       
     }
 
-    public ModelBuilder setSerializeOut(PrintWriter serializeOut) {
-      this.serializeOut=serializeOut;
-      return this;
-    }
-    
   } // end builder
 
 
@@ -1188,9 +1177,5 @@ public class ConfusedSLDADiscreteModel {
     logger.info("new bgamma="+optimum.getObject()+" old bgamma="+oldValue);
   }
   
-  private static void serializeChain(State s, PrintWriter out){
-    out.write(new Gson().toJson(s.z));
-  }
-
   
 }

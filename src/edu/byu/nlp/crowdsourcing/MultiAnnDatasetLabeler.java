@@ -28,7 +28,6 @@ import edu.byu.nlp.classify.data.DatasetBuilder;
 import edu.byu.nlp.classify.data.DatasetLabeler;
 import edu.byu.nlp.classify.eval.Predictions;
 import edu.byu.nlp.classify.util.ModelTraining;
-import edu.byu.nlp.crowdsourcing.ModelInitialization.MaxMarginalInitializer;
 import edu.byu.nlp.crowdsourcing.MultiAnnModelBuilders.MultiAnnModelBuilder;
 import edu.byu.nlp.crowdsourcing.gibbs.BlockCollapsedMultiAnnModelMath;
 import edu.byu.nlp.crowdsourcing.gibbs.BlockCollapsedMultiAnnModelMath.DiagonalizationMethod;
@@ -51,7 +50,6 @@ public class MultiAnnDatasetLabeler implements DatasetLabeler{
   private DiagonalizationMethod diagonalizationMethod;
   private int goldInstancesForDiagonalization;
   private PrintWriter statsOut;
-  private PrintWriter serializeOut;
   private String unannotatedDocumentWeight;
   private RandomGenerator rnd;
   private PrintWriter debugOut;
@@ -130,7 +128,7 @@ public class MultiAnnDatasetLabeler implements DatasetLabeler{
    * @param gold for computing confusion matrices for debugging
    */
   public MultiAnnDatasetLabeler(MultiAnnModelBuilder multiannModelBuilder, 
-    PrintWriter debugOut, PrintWriter serializeOut,
+    PrintWriter debugOut,
 		boolean predictSingleLastSample, String trainingOperations,
 		DiagonalizationMethod diagonalizationMethod,
 		boolean diagonalizationWithFullConfusionMatrix,
@@ -147,7 +145,6 @@ public class MultiAnnDatasetLabeler implements DatasetLabeler{
     this.diagonalizationWithFullConfusionMatrix=diagonalizationWithFullConfusionMatrix;
     this.goldInstancesForDiagonalization=goldInstancesForDiagonalization;
     this.statsOut=(statsOut==null)? new PrintWriter(ByteStreams.nullOutputStream()): statsOut;
-    this.serializeOut=(serializeOut==null)? new PrintWriter(ByteStreams.nullOutputStream()): serializeOut;
     this.debugOut=(debugOut==null)? new PrintWriter(ByteStreams.nullOutputStream()): debugOut;
     this.unannotatedDocumentWeight=unannotatedDocumentWeight;
     this.rnd=algRnd;
@@ -200,26 +197,19 @@ public class MultiAnnDatasetLabeler implements DatasetLabeler{
     return docWeights;
   }
 
+	// TODO: public for sanity test convenience. Should refactor at some point
+	public Predictions predict(MultiAnnModel model, Dataset data, Dataset heldoutData) {
+		logConfusions("Before Diagonalizing ", model.getCurrentState());
+		MultiAnnModelPredictor predictor = new MultiAnnModelPredictor(model, data, predictSingleLastSample,
+				diagonalizationMethod, goldInstancesForDiagonalization, diagonalizationWithFullConfusionMatrix, gold);
 
-  // TODO: public for sanity test convenience. Should refactor at some point 
-  public Predictions predict(MultiAnnModel model, Dataset data, Dataset heldoutData) {
-    logConfusions("Before Diagonalizing ", model.getCurrentState());
-    MultiAnnModelPredictor predictor = new MultiAnnModelPredictor(model, data, predictSingleLastSample, diagonalizationMethod, goldInstancesForDiagonalization, diagonalizationWithFullConfusionMatrix, gold);
+		// label switching fixed in these params
+		MultiAnnState sample = predictor.getFinalPredictiveParameters(); 
+		logConfusions("After Diagonalizing ", sample);
 
-    // serialize the model (y and m vectors)
-    try {
-      MultiAnnState sample = predictor.getFinalPredictiveParameters(); // label switching fixed in these params
-      logConfusions("After Diagonalizing ", sample);
-      sample.serializeTo(serializeOut);
-//      serializeOut.close();
-    } catch (IOException e) {
-      System.err.println("unable to serialize variables");
-      e.printStackTrace();
-    }
-    
-    // internally fixes label switching
-    return predictor.predict(heldoutData);
-  }
+		// internally fixes label switching
+		return predictor.predict(heldoutData);
+	}
 
   // TODO: public for sanity test convenience. Should refactor at some point 
   public MultiAnnModel buildModel(double[] docWeights){
@@ -229,15 +219,6 @@ public class MultiAnnDatasetLabeler implements DatasetLabeler{
     
     // train
     ModelTraining.doOperations(trainingOperations, model);
-
-    // In case it's helpful, record current sampling  
-    // state in the builder so the next model can pick
-    // up where this one left off. This will only make a difference 
-    // when data is being added and the model is being retrained
-    // FIXME (rhaertel): need better method of updating annotations.
-    MultiAnnState sample = model.getCurrentState();
-    builder.setMInitializer(new MaxMarginalInitializer(sample.getM(),data.getInfo().getNumClasses()));
-    builder.setYInitializer(new MaxMarginalInitializer(sample.getY(),data.getInfo().getNumClasses()));
     
     // record model
     model.getCurrentState().longDescription(debugOut);
