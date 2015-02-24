@@ -396,33 +396,37 @@ public class ConfusedSLDADiscreteModel {
 //          state.includeMetadataSupervision = false;
           for (int i=0; i<numIterations; i++){
             sampleY(state, rnd);
-            logger.debug("sample Y iteration "+i);
+            logger.debug("sample Y+B iteration "+i);
             // periodically tune hypers and report joint
             if (i%HYPERPARAM_TUNING_PERIOD==0){
-              logger.info("sample Y iteration "+i+" with (unnormalized) log joint "+unnormalizedLogJoint(state));
+              logger.info("maximizing log-linear weights b iteration "+i);
+              maximizeB(state); 
+              logger.info("sample Y+B iteration "+i+" with (unnormalized) log joint "+unnormalizedLogJoint(state));
               if (state.priors.getInlineHyperparamTuning()){
                 updateBGamma(state);
               }
             }
           }
-          logger.info("finished sampling Y "+numIterations+" times with (unnormalized) log joint "+unnormalizedLogJoint(state));
+          logger.info("finished sampling Y+B "+numIterations+" times with (unnormalized) log joint "+unnormalizedLogJoint(state));
         }
         // Z
         else if (variableName.toLowerCase().equals("z")){
 //          state.includeMetadataSupervision = false;
           for (int i=0; i<numIterations; i++){
             sampleZ(state, rnd);
-            logger.debug("sample Z iteration "+i);
+            logger.debug("sample Z+B iteration "+i);
             // periodically tune hypers and report joint
             if (i%HYPERPARAM_TUNING_PERIOD==0){
-              logger.info("sample Z iteration "+i+" with (unnormalized) log joint "+unnormalizedLogJoint(state));
+              logger.info("maximizing log-linear weights b iteration "+i);
+              maximizeB(state); 
+              logger.info("sample Z+B iteration "+i+" with (unnormalized) log joint "+unnormalizedLogJoint(state));
               if (state.priors.getInlineHyperparamTuning()){
                 updateBTheta(state);
                 updateBPhi(state);
               }
             }
           }
-          logger.info("finished sampling Z "+numIterations+" times with (unnormalized) log joint "+unnormalizedLogJoint(state));
+          logger.info("finished sampling Z+B "+numIterations+" times with (unnormalized) log joint "+unnormalizedLogJoint(state));
         }
         // B
         else if (variableName.toLowerCase().equals("b")){
