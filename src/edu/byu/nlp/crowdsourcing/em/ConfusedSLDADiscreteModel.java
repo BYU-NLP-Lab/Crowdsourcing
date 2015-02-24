@@ -360,6 +360,10 @@ public class ConfusedSLDADiscreteModel {
       /** {@inheritDoc} */
       @Override
       public void sample(String variableName, String[] args) {
+        // assume that all sampling should be done wrt the the current state of the other variables
+        // (never ignore metadata supervision)
+        state.includeMetadataSupervision = true;
+        
         Preconditions.checkNotNull(variableName);
         Preconditions.checkArgument(args.length>=1);
         int numIterations = Integer.parseInt(args[0]);
@@ -367,7 +371,7 @@ public class ConfusedSLDADiscreteModel {
         // Joint
         if (variableName.equals("all")){
           // sample topics and class labels jointly (SLOW)
-          state.includeMetadataSupervision = true;
+//          state.includeMetadataSupervision = true;
           for (int i=0; i<numIterations; i++){
             logger.debug("maximizing log-linear weights b iteration "+i);
             maximizeB(state); 
@@ -389,7 +393,7 @@ public class ConfusedSLDADiscreteModel {
         }
         // Y
         else if (variableName.toLowerCase().equals("y")){
-          state.includeMetadataSupervision = false;
+//          state.includeMetadataSupervision = false;
           for (int i=0; i<numIterations; i++){
             sampleY(state, rnd);
             logger.debug("sample Y iteration "+i);
@@ -405,7 +409,7 @@ public class ConfusedSLDADiscreteModel {
         }
         // Z
         else if (variableName.toLowerCase().equals("z")){
-          state.includeMetadataSupervision = false;
+//          state.includeMetadataSupervision = false;
           for (int i=0; i<numIterations; i++){
             sampleZ(state, rnd);
             logger.debug("sample Z iteration "+i);
@@ -434,24 +438,28 @@ public class ConfusedSLDADiscreteModel {
       public void maximize(String variableName, String[] args) {
         Preconditions.checkNotNull(variableName,"training operations must reference a specific variable (e.g., maximize-all, sample-y, etc)");
         int maxNumIterations = (args.length>=1)? Integer.parseInt(args[0]): DEFAULT_TRAINING_ITERATIONS;
+
+        // assume that all sampling should be done wrt the the current state of the other variables
+        // (never ignore metadata supervision)
+        state.includeMetadataSupervision = true;
         
         // Joint
         if (variableName.equals("all")){
           // maximize topics and class labels jointly (SLOW)
-          state.includeMetadataSupervision = true;
+//          state.includeMetadataSupervision = true;
           maximizeUntilConvergence(state, 0, 0, maxNumIterations); 
 //          logTopNWordsPerTopic(state, 10);
         }
         // Y
         else if (variableName.toLowerCase().equals("y")){ 
           // maximize class labels independently (FAST)
-          state.includeMetadataSupervision = false;
+//          state.includeMetadataSupervision = false;
           maximizeYUntilConvergence(state, 0, maxNumIterations);
         }
         // Z
         else if (variableName.toLowerCase().equals("z")){
           // maximize topics independently (FAST)
-          state.includeMetadataSupervision = false;
+//          state.includeMetadataSupervision = false;
           maximizeZUntilConvergence(state, 0, maxNumIterations);
         }
         // B

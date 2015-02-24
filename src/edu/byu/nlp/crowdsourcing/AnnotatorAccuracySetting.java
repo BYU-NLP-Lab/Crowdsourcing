@@ -35,6 +35,7 @@ public enum AnnotatorAccuracySetting {
   HIGH (new double[] { 0.90, 0.85, 0.80, 0.75, 0.70 }, 1e100), 
   MED (new double[] { 0.70, 0.65, 0.60, 0.55, 0.50 }, 1e100),
   LOW (new double[] { 0.50, 0.40, 0.30, 0.20, 0.10 }, 1e100),
+  MANYLOW (new double[] { 0.70, 0.67, 0.64, 0.61, 0.58, 0.55, 0.52, 0.49, 0.46, 0.43, 0.40, 0.37, 0.34, 0.31, 0.28, 0.25, 0.22, 0.19, 0.16, 0.13}, 1),
   CONFLICT (new double[] { 0.50, 0.40, 0.30, 0.20, 0.10 }, 0.1),
   EXPERT (new double[] { 0.90, 0.91, 0.93, 0.95, 0.97 }, 1e100),
   INDEPENDENT (new double[]{-1,-1,-1,-1,-1}, 0.1),
@@ -51,6 +52,10 @@ public enum AnnotatorAccuracySetting {
   public int getNumAnnotators(){
     Preconditions.checkNotNull(confusionMatrices, "call generateConfusionMatrices() first");
     return confusionMatrices.length;
+  }
+  public int getNumClasses(){
+    Preconditions.checkNotNull(confusionMatrices, "call generateConfusionMatrices() first");
+    return confusionMatrices[0].length;
   }
   public double[] getAccuracies(){
     Preconditions.checkNotNull(confusionMatrices, "call generateConfusionMatrices() first");
@@ -75,6 +80,9 @@ public enum AnnotatorAccuracySetting {
         } catch (IOException e) {
           throw new IllegalArgumentException("could not parse annotator file: "+filename);
         }
+        // ensure that the simulated annotators we are reading in have the same number of classes as the dataset we are labeling
+        Preconditions.checkState(confusionMatrices[0].length==numLabels,"mismatch between the number of label classes "
+            + "in the simulated annotator file "+confusionMatrices[0].length+" and the number in the dataset "+numLabels);
       }
       else if (this==INDEPENDENT){
         confusionMatrices = new double[accuracies.length][numLabels][numLabels];
