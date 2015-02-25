@@ -18,7 +18,10 @@ package edu.byu.nlp.crowdsourcing;
 import java.io.IOException;
 import java.util.Iterator;
 
+import org.apache.commons.math3.distribution.BetaDistribution;
 import org.apache.commons.math3.random.RandomGenerator;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.google.common.base.Charsets;
 import com.google.common.base.Preconditions;
@@ -31,6 +34,7 @@ import edu.byu.nlp.util.Indexers;
 import edu.byu.nlp.util.Matrices;
 
 public enum AnnotatorAccuracySetting {
+  
   GOOD (new double[] { 0.99999, 0.99999, 0.99999, 0.99999, 0.99999 }, 1e100), 
   HIGH (new double[] { 0.90, 0.85, 0.80, 0.75, 0.70 }, 1e100), 
   MED (new double[] { 0.70, 0.65, 0.60, 0.55, 0.50 }, 1e100),
@@ -40,7 +44,11 @@ public enum AnnotatorAccuracySetting {
   EXPERT (new double[] { 0.90, 0.91, 0.93, 0.95, 0.97 }, 1e100),
   INDEPENDENT (new double[]{-1,-1,-1,-1,-1}, 0.1),
   FILE (null, -1),
+  CFBETA (new double[100], 1), // accuracy values will be drawn from Beta(shape1,shape2) parameters MLE-fit from CFGroups data
   ;
+
+  private static Logger logger = LoggerFactory.getLogger(AnnotatorAccuracySetting.class);
+  
   // when this is very large, the off-diagonal is uniform
   private final double symmetricDirichletParam;
   private double[] accuracies;
@@ -74,7 +82,10 @@ public enum AnnotatorAccuracySetting {
   }
   public void generateConfusionMatrices(RandomGenerator rnd, int numLabels, String filename){
     if (confusionMatrices==null){
-      if (this==FILE){
+      switch (this) {
+      
+      // read annotator confusion matrices from file
+      case FILE:
         try {
           confusionMatrices = Matrices.parseTensor(Files2.toString(filename, Charsets.UTF_8));
         } catch (IOException e) {
@@ -83,8 +94,10 @@ public enum AnnotatorAccuracySetting {
         // ensure that the simulated annotators we are reading in have the same number of classes as the dataset we are labeling
         Preconditions.checkState(confusionMatrices[0].length==numLabels,"mismatch between the number of label classes "
             + "in the simulated annotator file "+confusionMatrices[0].length+" and the number in the dataset "+numLabels);
-      }
-      else if (this==INDEPENDENT){
+        break;
+        
+      // annotators are drawn from independent dirichlets
+      case INDEPENDENT:
         confusionMatrices = new double[accuracies.length][numLabels][numLabels];
         // a matrix where all rows are sampled from a dirichlet
         for (int a = 0; a < accuracies.length; a++) {
@@ -92,25 +105,20 @@ public enum AnnotatorAccuracySetting {
             confusionMatrices[a][i] = DirichletDistribution.sampleSymmetric(symmetricDirichletParam, numLabels, rnd);
           }
         }
-      }
-      else{
-        confusionMatrices = new double[accuracies.length][numLabels][numLabels];
-        // a matrix where non-diag entries
-        // are sampled and scaled to make each row sum to 1
-        for (int a = 0; a < accuracies.length; a++) {
-          double rowDiag = accuracies[a];
-          for (int i = 0; i < numLabels; i++) {
-            // off-diag elements are Dirichlet. Note that when 
-            // symmetricDirichletParam is very large, off-diag elements are uniform
-            double[] offDiag = DirichletDistribution.sampleSymmetric(symmetricDirichletParam, numLabels - 1, rnd);
-            // scale offDiag so row sums to 1
-            DoubleArrays.multiplyToSelf(offDiag, 1.0 - rowDiag); 
-            Iterator<Double> offDiagItr = DoubleArrays.iterator(offDiag);
-            for (int j = 0; j < numLabels; j++) {
-              confusionMatrices[a][i][j] = i == j ? rowDiag : offDiagItr.next();
-            }
-          }
-        }
+        break;
+        
+      // annotator accuracies drawn from Beta(shape1,shape2) parameters MLE-fit to CFGroups data
+      case CFBETA:
+        BetaDistribution accGen = new BetaDistribution(rnd, 3.6, 5.1);
+        accuracies = accGen.sample(accuracies.length); // sample accuracies
+        logger.info("sampled "+accuracies.length+" simulated annotator accuracies from a Beta(3.6,5.1). min="+DoubleArrays.min(accuracies)+" max="+DoubleArrays.max(accuracies)+" mean="+DoubleArrays.mean(accuracies));
+        confusionMatrices = confusionMatricesFromAccuracyAndDirichlet(accuracies, numLabels, symmetricDirichletParam, rnd);
+        break;
+        
+      // predetermined annotator accuracies 
+      default:
+        confusionMatrices = confusionMatricesFromAccuracyAndDirichlet(accuracies, numLabels, symmetricDirichletParam, rnd);
+        break;
       }
     }
   }
@@ -119,5 +127,26 @@ public enum AnnotatorAccuracySetting {
    */
   public Indexer<Long> getAnnotatorIdIndexer(){
     return Indexers.indexerOfLongs(getNumAnnotators());
+  }
+  
+  private static double[][][] confusionMatricesFromAccuracyAndDirichlet(double[] accuracies, int numLabels, double symmetricDirichletParam, RandomGenerator rnd){
+    double[][][] confusionMatrices = new double[accuracies.length][numLabels][numLabels];
+    // a matrix where non-diag entries
+    // are sampled and scaled to make each row sum to 1
+    for (int a = 0; a < accuracies.length; a++) {
+      double rowDiag = accuracies[a];
+      for (int i = 0; i < numLabels; i++) {
+        // off-diag elements are Dirichlet. Note that when 
+        // symmetricDirichletParam is very large, off-diag elements are uniform
+        double[] offDiag = DirichletDistribution.sampleSymmetric(symmetricDirichletParam, numLabels - 1, rnd);
+        // scale offDiag so row sums to 1
+        DoubleArrays.multiplyToSelf(offDiag, 1.0 - rowDiag); 
+        Iterator<Double> offDiagItr = DoubleArrays.iterator(offDiag);
+        for (int j = 0; j < numLabels; j++) {
+          confusionMatrices[a][i][j] = i == j ? rowDiag : offDiagItr.next();
+        }
+      }
+    }
+    return confusionMatrices;
   }
 }
