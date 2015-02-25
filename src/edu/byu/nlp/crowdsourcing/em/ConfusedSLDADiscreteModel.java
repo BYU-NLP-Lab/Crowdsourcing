@@ -373,11 +373,11 @@ public class ConfusedSLDADiscreteModel {
           // sample topics and class labels jointly (SLOW)
 //          state.includeMetadataSupervision = true;
           for (int i=0; i<numIterations; i++){
-            logger.debug("maximizing log-linear weights b iteration "+i);
+            logger.debug("maximizing log-linear weights B iteration "+i);
             maximizeB(state); 
-            logger.debug("sampling class label vector y iteration "+i);
+            logger.debug("sampling class label vector Y iteration "+i);
             sampleY(state, rnd);
-            logger.debug("sampling topic matrix z iteration "+i);
+            logger.debug("sampling topic matrix Z iteration "+i);
             sampleZ(state, rnd);
             // periodically tune hypers and report joint
             if (i%HYPERPARAM_TUNING_PERIOD==0){
@@ -399,7 +399,7 @@ public class ConfusedSLDADiscreteModel {
             logger.debug("sample Y+B iteration "+i);
             // periodically tune hypers and report joint
             if (i%HYPERPARAM_TUNING_PERIOD==0){
-              logger.info("maximizing log-linear weights b iteration "+i);
+              logger.info("maximizing log-linear weights B iteration "+i);
               maximizeB(state); 
               logger.info("sample Y+B iteration "+i+" with (unnormalized) log joint "+unnormalizedLogJoint(state));
               if (state.priors.getInlineHyperparamTuning()){
@@ -417,7 +417,7 @@ public class ConfusedSLDADiscreteModel {
             logger.debug("sample Z+B iteration "+i);
             // periodically tune hypers and report joint
             if (i%HYPERPARAM_TUNING_PERIOD==0){
-              logger.info("maximizing log-linear weights b iteration "+i);
+              logger.info("maximizing log-linear weights B iteration "+i);
               maximizeB(state); 
               logger.info("sample Z+B iteration "+i+" with (unnormalized) log joint "+unnormalizedLogJoint(state));
               if (state.priors.getInlineHyperparamTuning()){
@@ -1186,6 +1186,10 @@ public class ConfusedSLDADiscreteModel {
     	}
     }
     addPriorsToCounts(s);
+    // setting priors allows driver class to report settled-on values
+    double newCGamma = newDiag + (s.numClasses-1)*newOffDiag;
+    s.priors.setBGamma(newDiag/newCGamma);
+    s.priors.setCGamma(newCGamma);
     logger.info("new bgamma="+optimum.getObject()+" old bgamma="+oldValue);
   }
   
