@@ -26,7 +26,6 @@ import edu.byu.nlp.crowdsourcing.MultiAnnModel;
 import edu.byu.nlp.crowdsourcing.MultiAnnModelBuilders.AbstractMultiAnnModelBuilder;
 import edu.byu.nlp.crowdsourcing.MultiAnnState;
 import edu.byu.nlp.crowdsourcing.PriorSpecification;
-import edu.byu.nlp.crowdsourcing.gibbs.CollapsedItemResponseModel;
 import edu.byu.nlp.data.types.Dataset;
 import edu.byu.nlp.data.types.DatasetInstance;
 import edu.byu.nlp.dataset.Datasets;
@@ -49,7 +48,7 @@ import edu.byu.nlp.util.Pair;
  */
 public class MeanFieldItemRespModel extends AbstractMeanFieldMultiAnnModel {
 
-  private static final Logger logger = LoggerFactory.getLogger(CollapsedItemResponseModel.class);
+  private static final Logger logger = LoggerFactory.getLogger(MeanFieldItemRespModel.class);
 
   private static double INITIALIZATION_SMOOTHING = 1e-6; 
   

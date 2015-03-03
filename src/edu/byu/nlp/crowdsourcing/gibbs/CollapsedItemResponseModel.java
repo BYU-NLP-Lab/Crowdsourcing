@@ -18,8 +18,12 @@ import java.util.Map;
 import org.apache.commons.math3.random.RandomGenerator;
 import org.apache.commons.math3.special.Gamma;
 import org.fest.util.VisibleForTesting;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import edu.byu.nlp.crowdsourcing.CrowdsourcingUtils;
 import edu.byu.nlp.crowdsourcing.MultiAnnModel;
+import edu.byu.nlp.crowdsourcing.MultiAnnModelBuilders;
 import edu.byu.nlp.crowdsourcing.MultiAnnModelBuilders.AbstractMultiAnnModelBuilder;
 import edu.byu.nlp.crowdsourcing.MultiAnnState;
 import edu.byu.nlp.crowdsourcing.MultiAnnState.CollapsedItemResponseState;
@@ -28,10 +32,18 @@ import edu.byu.nlp.crowdsourcing.TrainableMultiAnnModel;
 import edu.byu.nlp.data.types.Dataset;
 import edu.byu.nlp.data.types.DatasetInstance;
 import edu.byu.nlp.data.types.SparseFeatureVector;
+import edu.byu.nlp.math.optimize.ConvergenceCheckers;
+import edu.byu.nlp.math.optimize.IterativeOptimizer;
+import edu.byu.nlp.math.optimize.IterativeOptimizer.ReturnType;
+import edu.byu.nlp.math.optimize.ValueAndObject;
 import edu.byu.nlp.stats.RandomGenerators;
+import edu.byu.nlp.stats.SymmetricDirichletMultinomialDiagonalMatrixMAPOptimizable;
+import edu.byu.nlp.stats.SymmetricDirichletMultinomialMatrixMAPOptimizable;
 import edu.byu.nlp.util.DoubleArrays;
 import edu.byu.nlp.util.IntArrayCounter;
+import edu.byu.nlp.util.Matrices;
 import edu.byu.nlp.util.MatrixAverager;
+import edu.byu.nlp.util.Pair;
 
 /**
  * @author pfelt
@@ -41,7 +53,7 @@ public class CollapsedItemResponseModel extends TrainableMultiAnnModel {
 
   private static final boolean USE_LOG_JOINT_FOR_COEFFS = false;
 
-//  private static final Logger logger = LoggerFactory.getLogger(CollapsedItemResponseModel.class);
+  private static final Logger logger = LoggerFactory.getLogger(CollapsedItemResponseModel.class);
 
   private final PriorSpecification priors;
 
@@ -60,7 +72,7 @@ public class CollapsedItemResponseModel extends TrainableMultiAnnModel {
   private final double[][][] countOfJYAndA; // (replaces alpha)
 
   // Cached values for efficiency
-  private final double[][] numAnnsPerJAndY; // [annotator][y]; \sum_k' countOfJYAndA[j][y][k']
+  private double[][] numAnnsPerJAndY; // [annotator][y]; \sum_k' countOfJYAndA[j][y][k']
                                             // (similar to numFeaturesPerM)
 
   // Also cached, but part of the data (no need to update)
@@ -214,6 +226,12 @@ public class CollapsedItemResponseModel extends TrainableMultiAnnModel {
       maximizeY(docIndex, instance.asFeatureVector());
       ++docIndex;
     }
+    
+    // do hyper updates
+    if (priors.getInlineHyperparamTuning()){
+      updateBTheta();
+      updateBGamma();
+    }
   }
   
   @Override
@@ -236,6 +254,12 @@ public class CollapsedItemResponseModel extends TrainableMultiAnnModel {
       ++docIndex;
     }
     yMarginals.increment(y);
+    
+    // do hyper updates
+    if (priors.getInlineHyperparamTuning()){
+      updateBTheta();
+      updateBGamma();
+    }
   }
 
   @Override
@@ -376,5 +400,82 @@ public class CollapsedItemResponseModel extends TrainableMultiAnnModel {
     diagonMatrixAverager.increment(getCurrentState().getMu()); // mus is a dummy diagonal value
     return diagonMatrixAverager;
   }
+  
+  private void updateBTheta() {
+    logger.debug("optimizing btheta in light of most recent topic assignments");
+    subtractPriorsFromCounts();
+    
+    double oldValue = priors.getBTheta();
+    double[][] thetaData = new double[][]{DoubleArrays.exp(logCountOfY)};
+    IterativeOptimizer optimizer = new IterativeOptimizer(ConvergenceCheckers.relativePercentChange(PriorSpecification.HYPERPARAM_LEARNING_CONVERGENCE_THRESHOLD));
+    SymmetricDirichletMultinomialMatrixMAPOptimizable o = SymmetricDirichletMultinomialMatrixMAPOptimizable.newOptimizable(thetaData,2,2);
+    ValueAndObject<Double> optimum = optimizer.optimize(o, ReturnType.HIGHEST, true, oldValue);
+    priors.setBTheta(optimum.getObject());
+    
+    addPriorsToCounts();
+    logger.info("new btheta="+priors.getBTheta()+" old btheta="+oldValue);
+  }
+  
+  private void updateBGamma() {
+    int numClasses = data.getInfo().getNumClasses();
+    logger.debug("optimizing bgamma in light of most recent document labels");
+    subtractPriorsFromCounts();
 
+    double[][] gammaHyperParams = calculateGammaHyperParams();
+    Pair<Double,Double> oldValue = Pair.of(gammaHyperParams[0][0], gammaHyperParams[0][1]);
+    IterativeOptimizer optimizer = new IterativeOptimizer(ConvergenceCheckers.relativePercentChange(PriorSpecification.HYPERPARAM_LEARNING_CONVERGENCE_THRESHOLD));
+    SymmetricDirichletMultinomialDiagonalMatrixMAPOptimizable o = SymmetricDirichletMultinomialDiagonalMatrixMAPOptimizable.newOptimizable(countOfJYAndA, 2, 2);
+    ValueAndObject<Pair<Double,Double>> optimum = optimizer.optimize(o, ReturnType.HIGHEST, true, oldValue);
+    double newDiag = optimum.getObject().getFirst();
+    double newOffDiag = optimum.getObject().getSecond();
+    // setting priors here means the new values will be used to increment counts below
+    double newCGamma = newDiag + (numClasses-1)*newOffDiag;
+    priors.setBGamma(newDiag/newCGamma);
+    priors.setCGamma(newCGamma);
+    
+    addPriorsToCounts();
+    logger.info("new bgamma="+optimum.getObject()+" old bgamma="+oldValue);
+  }
+
+  private void addPriorsToCounts(){
+    // btheta
+    DoubleArrays.expToSelf(logCountOfY);
+    DoubleArrays.addToSelf(logCountOfY, priors.getBTheta());
+    DoubleArrays.logToSelf(logCountOfY);
+
+    // bgamma 
+    double[][] gammaHyperParams = calculateGammaHyperParams();
+    for (int j=0; j<data.getInfo().getNumAnnotators(); j++){
+      Matrices.addToSelf(countOfJYAndA[j], gammaHyperParams);
+    }
+    updateDerivedCounts(); // pre-compute some derived counts 
+  }
+  
+  private void subtractPriorsFromCounts(){
+    DoubleArrays.expToSelf(logCountOfY);
+    DoubleArrays.subtractToSelf(logCountOfY, priors.getBTheta());
+    for (int i=0; i<logCountOfY.length; i++){
+      logCountOfY[i] = Math.max(0, logCountOfY[i]); // ensure no floating point error "negatives" mess us up 
+    }
+    DoubleArrays.logToSelf(logCountOfY);
+
+    // bgamma 
+    double[][] gammaHyperParams = calculateGammaHyperParams();
+    for (int j=0; j<data.getInfo().getNumAnnotators(); j++){
+      Matrices.subtractFromSelf(countOfJYAndA[j], gammaHyperParams);
+    }
+    updateDerivedCounts(); // pre-compute some derived counts 
+  }
+  
+  private void updateDerivedCounts(){
+    this.numAnnsPerJAndY = MultiAnnModelBuilders.numAnnsPerJAndY(this.countOfJYAndA);
+  }
+  
+  private double[][] calculateGammaHyperParams(){
+    int numClasses = data.getInfo().getNumClasses();
+    double[][] gammaHyperParams = new double[numClasses][numClasses];
+    CrowdsourcingUtils.initializeConfusionMatrixWithPrior(gammaHyperParams, priors.getBGamma(), priors.getCGamma());
+    return gammaHyperParams;
+  }
+  
 }
