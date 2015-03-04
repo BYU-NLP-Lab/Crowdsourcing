@@ -17,6 +17,7 @@ package edu.byu.nlp.crowdsourcing;
 
 import java.io.IOException;
 import java.util.Iterator;
+import java.util.List;
 
 import org.apache.commons.math3.distribution.BetaDistribution;
 import org.apache.commons.math3.random.RandomGenerator;
@@ -26,6 +27,8 @@ import org.slf4j.LoggerFactory;
 import com.google.common.base.Charsets;
 import com.google.common.base.Preconditions;
 
+import edu.byu.nlp.data.annotators.SimulatedAnnotator;
+import edu.byu.nlp.data.annotators.SimulatedAnnotators;
 import edu.byu.nlp.io.Files2;
 import edu.byu.nlp.stats.DirichletDistribution;
 import edu.byu.nlp.util.DoubleArrays;
@@ -53,6 +56,7 @@ public enum AnnotatorAccuracySetting {
   private final double symmetricDirichletParam;
   private double[] accuracies;
   double[][][] confusionMatrices;
+  double [] annotatorRates;
   private AnnotatorAccuracySetting(double[] accuracies, double symmetricDirichletParam){
     this.accuracies=accuracies;
     this.symmetricDirichletParam=symmetricDirichletParam;
@@ -80,14 +84,21 @@ public enum AnnotatorAccuracySetting {
     Preconditions.checkNotNull(confusionMatrices, "call generateConfusionMatrices() first");
     return confusionMatrices;
   }
+  public double[] getAnnotatorRates(){
+    Preconditions.checkNotNull(annotatorRates, "call generateConfusionMatrices() first");
+    return annotatorRates;
+  }
   public void generateConfusionMatrices(RandomGenerator rnd, int numLabels, String filename){
+    
     if (confusionMatrices==null){
       switch (this) {
       
       // read annotator confusion matrices from file
       case FILE:
         try {
-          confusionMatrices = Matrices.parseTensor(Files2.toString(filename, Charsets.UTF_8));
+          List<SimulatedAnnotator> annotators = SimulatedAnnotators.deserialize(Files2.toString(filename, Charsets.UTF_8));
+          annotatorRates = SimulatedAnnotators.annotationRatesOf(annotators);
+          confusionMatrices = SimulatedAnnotators.confusionsOf(annotators);
         } catch (IOException e) {
           throw new IllegalArgumentException("could not parse annotator file: "+filename);
         }
@@ -98,6 +109,7 @@ public enum AnnotatorAccuracySetting {
         
       // annotators are drawn from independent dirichlets
       case INDEPENDENT:
+        annotatorRates = uniformAnnotatorRates(accuracies.length);
         confusionMatrices = new double[accuracies.length][numLabels][numLabels];
         // a matrix where all rows are sampled from a dirichlet
         for (int a = 0; a < accuracies.length; a++) {
@@ -109,6 +121,7 @@ public enum AnnotatorAccuracySetting {
         
       // annotator accuracies drawn from Beta(shape1,shape2) parameters MLE-fit to CFGroups data
       case CFBETA:
+        annotatorRates = uniformAnnotatorRates(accuracies.length);
         BetaDistribution accGen = new BetaDistribution(rnd, 3.6, 5.1);
         accuracies = accGen.sample(accuracies.length); // sample accuracies
         logger.info("sampled "+accuracies.length+" simulated annotator accuracies from a Beta(3.6,5.1). min="+DoubleArrays.min(accuracies)+" max="+DoubleArrays.max(accuracies)+" mean="+DoubleArrays.mean(accuracies));
@@ -117,6 +130,7 @@ public enum AnnotatorAccuracySetting {
         
       // predetermined annotator accuracies 
       default:
+        annotatorRates = uniformAnnotatorRates(accuracies.length);
         confusionMatrices = confusionMatricesFromAccuracyAndDirichlet(accuracies, numLabels, symmetricDirichletParam, rnd);
         break;
       }
@@ -127,6 +141,10 @@ public enum AnnotatorAccuracySetting {
    */
   public Indexer<Long> getAnnotatorIdIndexer(){
     return Indexers.indexerOfLongs(getNumAnnotators());
+  }
+  
+  private static double[] uniformAnnotatorRates(int numAnnotators){
+    return DoubleArrays.of(1.0/numAnnotators, numAnnotators);
   }
   
   private static double[][][] confusionMatricesFromAccuracyAndDirichlet(double[] accuracies, int numLabels, double symmetricDirichletParam, RandomGenerator rnd){
