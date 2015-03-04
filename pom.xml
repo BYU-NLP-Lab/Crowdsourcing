@@ -8,7 +8,7 @@
 		<relativePath>../byunlp-maven-base</relativePath>
 	</parent>
 	<artifactId>statnlp-crowdsourcing</artifactId>
-	<version>1.0</version>
+	<version>1.1-SNAPSHOT</version>
 	<name>BYU NLP Crowdsourcing Library</name>
 	<build>
 		<sourceDirectory>src</sourceDirectory>
@@ -79,9 +79,20 @@
 			<version>1.2.5</version>
 		</dependency>
 		<dependency>
+			<groupId>org.slf4j</groupId>
+			<artifactId>slf4j-simple</artifactId>
+			<version>1.7.7</version>
+			<optional>true</optional>
+		</dependency>
+		<dependency>
 			<groupId>junit</groupId>
 			<artifactId>junit</artifactId>
 			<version>4.11</version>
+		</dependency>
+		<dependency>
+			<groupId>edu.byu.nlp</groupId>
+			<artifactId>annotationinterface</artifactId>
+			<version>1.0</version>
 		</dependency>
 		<dependency>
 			<groupId>edu.byu.nlp</groupId>
@@ -91,28 +102,17 @@
 		<dependency>
 			<groupId>edu.byu.nlp</groupId>
 			<artifactId>commons</artifactId>
-			<version>1.0</version>
+			<version>1.1-SNAPSHOT</version>
 		</dependency>
 		<dependency>
 			<groupId>edu.byu.nlp</groupId>
 			<artifactId>dataset-utils</artifactId>
-			<version>1.0</version>
-		</dependency>
-		<dependency>
-			<groupId>edu.byu.nlp</groupId>
-			<artifactId>annotationinterface</artifactId>
-			<version>1.0</version>
+			<version>1.1-SNAPSHOT</version>
 		</dependency>
 		<dependency>
 			<groupId>edu.byu.nlp</groupId>
 			<artifactId>statnlp-classification</artifactId>
-			<version>1.0</version>
-		</dependency>
-		<dependency>
-			<groupId>org.slf4j</groupId>
-			<artifactId>slf4j-simple</artifactId>
-			<version>1.7.7</version>
-			<optional>true</optional>
+			<version>1.1-SNAPSHOT</version>
 		</dependency>
 	</dependencies>
 </project>
