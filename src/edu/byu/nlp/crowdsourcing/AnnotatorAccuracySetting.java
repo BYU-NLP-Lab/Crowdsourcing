@@ -137,7 +137,7 @@ public enum AnnotatorAccuracySetting {
       
       // force uniform annotator rates
       if (!varyAnnotatorRates){
-          annotatorRates = uniformAnnotatorRates(accuracies.length);
+          annotatorRates = uniformAnnotatorRates(confusionMatrices.length);
       }
     }
   }
