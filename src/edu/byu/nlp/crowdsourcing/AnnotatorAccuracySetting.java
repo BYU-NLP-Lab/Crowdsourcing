@@ -88,7 +88,7 @@ public enum AnnotatorAccuracySetting {
     Preconditions.checkNotNull(annotatorRates, "call generateConfusionMatrices() first");
     return annotatorRates;
   }
-  public void generateConfusionMatrices(RandomGenerator rnd, int numLabels, String filename){
+  public void generateConfusionMatrices(RandomGenerator rnd, boolean varyAnnotatorRates, int numLabels, String filename){
     
     if (confusionMatrices==null){
       switch (this) {
@@ -133,6 +133,11 @@ public enum AnnotatorAccuracySetting {
         annotatorRates = uniformAnnotatorRates(accuracies.length);
         confusionMatrices = confusionMatricesFromAccuracyAndDirichlet(accuracies, numLabels, symmetricDirichletParam, rnd);
         break;
+      }
+      
+      // force uniform annotator rates
+      if (!varyAnnotatorRates){
+          annotatorRates = uniformAnnotatorRates(accuracies.length);
       }
     }
   }
