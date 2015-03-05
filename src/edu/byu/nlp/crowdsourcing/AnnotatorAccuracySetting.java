@@ -135,6 +135,10 @@ public enum AnnotatorAccuracySetting {
         break;
       }
       
+      if (varyAnnotatorRates && this!=FILE){
+        throw new IllegalStateException("Varying annotator rates are ONLY implemented for FILE annotators. Not "+this);
+      }
+      
       // force uniform annotator rates
       if (!varyAnnotatorRates){
           annotatorRates = uniformAnnotatorRates(confusionMatrices.length);
