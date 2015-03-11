@@ -233,8 +233,10 @@ public class ModelInitialization {
 		for (DatasetInstance inst: data){
 			String src = inst.getInfo().getSource();
 			SerializableCrowdsourcingDocumentState docState = serializedState.getDocument(src);
-			int index = instanceIndices.get(src);
-			assignments[index] = docState.getY(); 
+			Integer index = instanceIndices.get(src);
+			if (docState!=null && index!=null){
+  			assignments[index] = docState.getY();
+			}
 		}
 	}
   }
