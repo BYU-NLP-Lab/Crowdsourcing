@@ -21,10 +21,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import cc.mallet.classify.MaxEnt;
-import cc.mallet.classify.MaxEntTrainer;
 import cc.mallet.types.Alphabet;
 import cc.mallet.types.Instance;
-import cc.mallet.types.InstanceList;
 import cc.mallet.types.LabelAlphabet;
 import cc.mallet.types.LabelVector;
 
@@ -38,7 +36,6 @@ import edu.byu.nlp.crowdsourcing.CrowdsourcingUtils;
 import edu.byu.nlp.crowdsourcing.PriorSpecification;
 import edu.byu.nlp.data.types.Dataset;
 import edu.byu.nlp.data.types.DatasetInstance;
-import edu.byu.nlp.data.types.SparseFeatureVector.EntryVisitor;
 import edu.byu.nlp.dataset.Datasets;
 import edu.byu.nlp.math.Math2;
 import edu.byu.nlp.util.DoubleArrays;
@@ -58,18 +55,14 @@ public class RaykarModel {
   private double[][] softlabels;
   private Instance[] instances;
   private int[][][] a;
-  private Alphabet dataAlphabet;
-  private LabelAlphabet targetAlphabet;
   private List<DatasetInstance> externalInstances;
   private double logJoint;
   
   public RaykarModel(MaxEnt maxent, double[][][] gammas, double[][] softlabels, Instance[] instances, 
-      List<DatasetInstance> externalInstances, int[][][] a, Alphabet dataAlphabet, LabelAlphabet targetAlphabet, double logJoint){
+      List<DatasetInstance> externalInstances, int[][][] a, double logJoint){
     this.maxent=maxent;
     this.gammas=gammas;
     this.softlabels=softlabels;
-    this.dataAlphabet=dataAlphabet;
-    this.targetAlphabet=targetAlphabet;
     this.instances=instances;
     this.externalInstances=externalInstances;
     this.a=a;
@@ -79,8 +72,6 @@ public class RaykarModel {
   public static class ModelBuilder {
     private Dataset data;
     private Instance[] instances;
-    private Alphabet dataAlphabet;
-    private LabelAlphabet targetAlphabet;
     private int a[][][];
     private MaxEnt maxent;
     private List<DatasetInstance> externalInstances;
@@ -91,53 +82,6 @@ public class RaykarModel {
       this.data=data;
       this.priors=priors;
       this.semisupervised=semisupervised;
-    }
-    
-    private void initTrainingSet(){
-//      List<DatasetInstance> allInstances = Lists.newArrayList(data);
-      externalInstances = Lists.newArrayListWithCapacity(data.getInfo().getNumDocuments());
-      instances = new Instance[data.getInfo().getNumDocuments()];
-      dataAlphabet = new Alphabet();
-      dataAlphabet.startGrowth();
-      targetAlphabet = new LabelAlphabet();
-      targetAlphabet.startGrowth();
-      
-      // mallet alphabets
-      for (DatasetInstance inst: data){
-        // visit the data
-        inst.asFeatureVector().visitSparseEntries(new EntryVisitor() {
-          @Override
-          public void visitEntry(int index, double value) {
-            dataAlphabet.lookupIndex(index, true);
-          }
-        });
-        if (inst.hasLabel()){ // ignore null label (but use hidden labels for label coverage--no cheating here)
-          targetAlphabet.lookupLabel(inst.getLabel(), true);
-        }
-      }
-      dataAlphabet.stopGrowth();
-      targetAlphabet.stopGrowth();
-      
-      // convert instances
-      int index=0;
-      for (DatasetInstance inst: data){
-        // convert feature vector
-        instances[index] = MalletMaxentTrainer.convert(dataAlphabet, inst);
-        // remember the original instance
-        externalInstances.add(inst);
-        index++;
-      }
-
-      // convert annotations
-      int[][][] rawAnnotations = Datasets.compileDenseAnnotations(data);
-      a = new int[instances.length][priors.getNumAnnotators()][data.getInfo().getNumClasses()];
-      for (int i=0; i<rawAnnotations.length; i++){
-        for (int j=0; j<priors.getNumAnnotators(); j++){
-          for (int k=0; k<data.getInfo().getNumClasses(); k++){
-            a[i][j][targetAlphabet.lookupIndex(k)] = rawAnnotations[i][j][k];
-          }
-        }
-      }
     }
     
     
@@ -165,9 +109,8 @@ public class RaykarModel {
      * run EM to train raykar et al. model
      */
     public RaykarModel build(){
-      // convert the dataset to mallet
-      initTrainingSet();
-
+      a = Datasets.compileDenseAnnotations(data);
+      
       //////////////////
       // Init (with soft majority vote labels + maxent training)
       //////////////////
@@ -175,7 +118,22 @@ public class RaykarModel {
       logger.info("Initializing EM (training model on majority vote labels)");
       double[][] softlabels = majorityVoteSoftLabels();
       double[][][] gammas = maxGammas(softlabels, a, priors.getNumAnnotators(), data.getInfo().getNumClasses(), priors);
-      maxent = maxDataModel(softlabels,maxent,instances,dataAlphabet,targetAlphabet);
+
+      MalletMaxentTrainer trainer = MalletMaxentTrainer.build(data);
+      maxent = trainer.maxDataModel(softlabels, maxent);
+      
+      // convert the dataset to mallet
+      externalInstances = Lists.newArrayListWithCapacity(data.getInfo().getNumDocuments());
+      instances = new Instance[data.getInfo().getNumDocuments()];
+      // convert instances
+      int index=0;
+      for (DatasetInstance inst: data){
+        // convert feature vector
+        instances[index] = MalletMaxentTrainer.convert(maxent.getAlphabet(), inst);
+        // remember the original instance
+        externalInstances.add(inst);
+        index++;
+      }
       
       // EM training
       double previousValue = Double.MIN_VALUE;
@@ -193,7 +151,7 @@ public class RaykarModel {
         //////////////////
         logger.info(iterations+" M-step (maximizing parameters based on expected 'soft' labels)");
         gammas = maxGammas(softlabels, a, priors.getNumAnnotators(), data.getInfo().getNumClasses(), priors);
-        maxent = maxDataModel(softlabels,maxent,instances,dataAlphabet,targetAlphabet);
+        maxent = trainer.maxDataModel(softlabels, maxent);
         
         previousValue = value;
         value = logJoint(priors,gammas,softlabels,maxent,instances,a);
@@ -203,7 +161,7 @@ public class RaykarModel {
       
       } while(iterations < 100 && value - previousValue > 1e-6);
       
-      return new RaykarModel(maxent, gammas, softlabels, instances, externalInstances, a, dataAlphabet, targetAlphabet, value);
+      return new RaykarModel(maxent, gammas, softlabels, instances, externalInstances, a, value);
     }
 
     private static double logJoint(PriorSpecification priors, double[][][] gammas, double[][] softlabels, MaxEnt maxent, Instance[] instances, int[][][] a) {
@@ -211,7 +169,7 @@ public class RaykarModel {
       double[][] gammaprior = Matrices.of(0, gammas[0].length, gammas[0].length);
       // gammas
       for (int j=0; j<gammas.length; j++){
-        CrowdsourcingUtils.initializeConfusionMatrixWithPrior(gammaprior, priors.getBGamma(j), priors.getCGamma());
+        CrowdsourcingUtils.initializeConfusionMatrixWithPrior(gammaprior, priors.getBGamma(), priors.getCGamma());
         for (int i=0; i<instances.length; i++){
           LabelVector labels = maxent.classify(instances[i]).getLabelVector();
           for (int k=0; k<gammas[j].length; k++){
@@ -271,7 +229,7 @@ public class RaykarModel {
       double[][][] gammas = new double[numAnnotators][numLabels][numLabels];
       // add priors
       for (int j=0; j<numAnnotators; j++){
-        CrowdsourcingUtils.initializeConfusionMatrixWithPrior(gammas[j], priors.getBGamma(j), priors.getCGamma());
+        CrowdsourcingUtils.initializeConfusionMatrixWithPrior(gammas[j], priors.getBGamma(), priors.getCGamma());
       }
       
       for (int j=0; j<numAnnotators; j++){
@@ -291,23 +249,6 @@ public class RaykarModel {
       return gammas;
     }
 
-    private static MaxEnt maxDataModel(double[][] softlabels, MaxEnt previousModel, Instance[] instances, Alphabet dataAlphabet, LabelAlphabet targetAlphabet){
-      // create a training set by adding each instance K times, each weighted by softlabels
-      InstanceList trainingSet = new InstanceList(dataAlphabet, targetAlphabet);
-      for (int i=0; i<instances.length; i++){
-        for (int k=0; k<targetAlphabet.size(); k++){
-          if (!Double.isNaN(softlabels[i][k])){ // ignore nans (instances with no annotations)
-            // give this instance label k with weight softlabels[k]
-            Instance inst = instances[i].shallowCopy();
-            inst.setTarget(targetAlphabet.lookupLabel(k));
-            trainingSet.add(inst, softlabels[i][k]);
-          }
-        }
-      }
-      // train
-      return new MaxEntTrainer(previousModel).train(trainingSet);
-    }
-    
   }
   
   private boolean isAnnotated(int a[][]){
@@ -341,13 +282,13 @@ public class RaykarModel {
     List<Prediction> labeledPredictions = Lists.newArrayList();
     List<Prediction> unlabeledPredictions = Lists.newArrayList();
     for (int i=0; i<instances.length; i++){
-      List<Integer> pi = softLabels2ExternalPredictions(softlabels[i], targetAlphabet);
+      List<Integer> pi = softLabels2ExternalPredictions(softlabels[i], maxent.getLabelAlphabet());
       if (isAnnotated(a[i])){
         labeledPredictions.add(new BasicPrediction(pi, externalInstances.get(i)));
       }
       else{
         // make a prediction based soley on the data model
-        List<Integer> predictionIndices = unannotatedPrediction(externalInstances.get(i), dataAlphabet, targetAlphabet, maxent);
+        List<Integer> predictionIndices = unannotatedPrediction(externalInstances.get(i), maxent.getAlphabet(), maxent.getLabelAlphabet(), maxent);
         unlabeledPredictions.add(new BasicPrediction(predictionIndices, externalInstances.get(i)));
       }
     }
@@ -355,7 +296,7 @@ public class RaykarModel {
     // generalization labels
     List<Prediction> heldoutPredictions = Lists.newArrayList();
     for (DatasetInstance inst: heldoutInstances){
-      List<Integer> predictionIndices = unannotatedPrediction(inst, dataAlphabet, targetAlphabet, maxent);
+      List<Integer> predictionIndices = unannotatedPrediction(inst, maxent.getAlphabet(), maxent.getLabelAlphabet(), maxent);
       heldoutPredictions.add(new BasicPrediction(predictionIndices, inst));
     }
     
