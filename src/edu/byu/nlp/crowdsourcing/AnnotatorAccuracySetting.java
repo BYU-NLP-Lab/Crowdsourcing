@@ -44,6 +44,7 @@ public enum AnnotatorAccuracySetting {
   LOW (new double[] { 0.50, 0.40, 0.30, 0.20, 0.10 }, 1e100),
   MANYLOW (new double[] { 0.70, 0.67, 0.64, 0.61, 0.58, 0.55, 0.52, 0.49, 0.46, 0.43, 0.40, 0.37, 0.34, 0.31, 0.28, 0.25, 0.22, 0.19, 0.16, 0.13}, 1),
   CONFLICT (new double[] { 0.50, 0.40, 0.30, 0.20, 0.10 }, 0.1),
+  CONFLICT_MILD (new double[] { 0.50, 0.40, 0.30, 0.20, 0.10 }, 1),
   EXPERT (new double[] { 0.90, 0.91, 0.93, 0.95, 0.97 }, 1e100),
   INDEPENDENT (new double[]{-1,-1,-1,-1,-1}, 0.1),
   FILE (null, -1),
