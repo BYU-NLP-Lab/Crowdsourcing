@@ -289,7 +289,7 @@ public class BlockCollapsedMultiAnnModelTest {
   @Test
   public void testJSONData() throws FileNotFoundException{
     
-    Dataset data = JsonDatasetMocker.buildTestDatasetFromJson(JsonDatasetMocker.jsonInstances(System.currentTimeMillis()));
+    Dataset data = JsonDatasetMocker.buildTestDatasetFromJson(JsonDatasetMocker.jsonInstances1(System.currentTimeMillis()));
     RandomGenerator rnd = new MersenneTwister(1);
     
     ModelBuilder builder = (ModelBuilder) new BlockCollapsedMultiAnnModel.ModelBuilder()
