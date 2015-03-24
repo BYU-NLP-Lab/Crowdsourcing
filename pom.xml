@@ -8,7 +8,7 @@
 		<relativePath>../byunlp-maven-base</relativePath>
 	</parent>
 	<artifactId>statnlp-crowdsourcing</artifactId>
-	<version>1.1</version>
+	<version>1.2-SNAPSHOT</version>
 	<name>BYU NLP Crowdsourcing Library</name>
 	<build>
 		<sourceDirectory>src</sourceDirectory>
@@ -102,17 +102,17 @@
 		<dependency>
 			<groupId>edu.byu.nlp</groupId>
 			<artifactId>commons</artifactId>
-			<version>1.1</version>
+			<version>1.2-SNAPSHOT</version>
 		</dependency>
 		<dependency>
 			<groupId>edu.byu.nlp</groupId>
 			<artifactId>dataset-utils</artifactId>
-			<version>1.1</version>
+			<version>1.2-SNAPSHOT</version>
 		</dependency>
 		<dependency>
 			<groupId>edu.byu.nlp</groupId>
 			<artifactId>statnlp-classification</artifactId>
-			<version>1.1</version>
+			<version>1.2-SNAPSHOT</version>
 		</dependency>
 	</dependencies>
 </project>
