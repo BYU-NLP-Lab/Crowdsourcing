@@ -15,8 +15,6 @@
  */
 package edu.byu.nlp.crowdsourcing;
 
-import java.util.Collections;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
 
@@ -26,6 +24,7 @@ import com.google.common.collect.Sets;
 
 import edu.byu.nlp.data.FlatInstance;
 import edu.byu.nlp.data.util.EmpiricalAnnotations;
+import edu.byu.nlp.dataset.Datasets;
 
 /**
  * Provides annotation as found in recorded data
@@ -58,15 +57,7 @@ public class EmpiricalAnnotationProvider<D, L> implements LabelProvider<D, L> {
   private L nextAnnotation(Multimap<Long, FlatInstance<D, L>> instanceAnnotations) {
     // return next unused annotation for this annotator
     List<FlatInstance<D, L>> annotationList = Lists.newArrayList(instanceAnnotations.get(annotatorId));
-    Collections.sort(annotationList, new Comparator<FlatInstance<D, L>>(){
-      @Override
-      public int compare(FlatInstance<D, L> o1, FlatInstance<D, L> o2) {
-        // no null checking since we want to fail if annotation time is not set. 
-        return Long.compare(
-            o1.getEndTimestamp(),
-            o2.getEndTimestamp());
-      }
-    });
+    Datasets.sortAnnotations(annotationList);
     
     for (FlatInstance<D, L> ann: annotationList){
       if (!usedAnnotations.contains(ann)){
