@@ -24,12 +24,12 @@ import edu.byu.nlp.data.types.Dataset;
  * @author pfelt
  *
  */
-public class RaykarModelLabeler implements DatasetLabeler{
+public class LogRespModelLabeler implements DatasetLabeler{
 
-  private RaykarModel model;
+  private LogRespModel model;
 
-  public RaykarModelLabeler(Dataset data, PriorSpecification priors, boolean semisupervised){
-    this.model = new RaykarModel.ModelBuilder(data, priors, semisupervised).build();
+  public LogRespModelLabeler(Dataset data, PriorSpecification priors, boolean semisupervised){
+    this.model = new LogRespModel.ModelBuilder(data, priors, semisupervised).build();
   }
   
   /** {@inheritDoc} */

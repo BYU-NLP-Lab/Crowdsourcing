@@ -50,9 +50,9 @@ import edu.byu.nlp.util.Pair;
 /**
  * @author pfelt
  */
-public class MeanFieldRaykarModel extends AbstractMeanFieldMultiAnnModel {
+public class MeanFieldLogRespModel extends AbstractMeanFieldMultiAnnModel {
 
-  private static final Logger logger = LoggerFactory.getLogger(MeanFieldRaykarModel.class);
+  private static final Logger logger = LoggerFactory.getLogger(MeanFieldLogRespModel.class);
 
   private static double INITIALIZATION_SMOOTHING = 1e-6; 
   
@@ -111,7 +111,7 @@ public class MeanFieldRaykarModel extends AbstractMeanFieldMultiAnnModel {
       
       // create model and initialize with empirical counts
       MalletMaxentTrainer trainer = MalletMaxentTrainer.build(data);
-      MeanFieldRaykarModel model = new MeanFieldRaykarModel(trainer, priors,a,gammaParams,instanceIndices,data,rnd);
+      MeanFieldLogRespModel model = new MeanFieldLogRespModel(trainer, priors,a,gammaParams,instanceIndices,data,rnd);
       model.empiricalFit();
       
       return model;
@@ -120,7 +120,7 @@ public class MeanFieldRaykarModel extends AbstractMeanFieldMultiAnnModel {
   }
 
   
-  public MeanFieldRaykarModel(MalletMaxentTrainer trainer, PriorSpecification priors, int[][][] a,  
+  public MeanFieldLogRespModel(MalletMaxentTrainer trainer, PriorSpecification priors, int[][][] a,  
       double[][][] gammaParams, Map<String,Integer> instanceIndices, Dataset data, RandomGenerator rnd) {
     this.trainer=trainer;
     this.priors=priors;

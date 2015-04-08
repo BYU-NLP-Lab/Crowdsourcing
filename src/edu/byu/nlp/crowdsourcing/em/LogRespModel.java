@@ -46,9 +46,9 @@ import edu.byu.nlp.util.Matrices;
  * @author pfelt
  *
  */
-public class RaykarModel {
+public class LogRespModel {
 
-  private static final Logger logger = LoggerFactory.getLogger(RaykarModel.class);
+  private static final Logger logger = LoggerFactory.getLogger(LogRespModel.class);
   
   private MaxEnt maxent;
   private double[][][] gammas;
@@ -58,7 +58,7 @@ public class RaykarModel {
   private List<DatasetInstance> externalInstances;
   private double logJoint;
   
-  public RaykarModel(MaxEnt maxent, double[][][] gammas, double[][] softlabels, Instance[] instances, 
+  public LogRespModel(MaxEnt maxent, double[][][] gammas, double[][] softlabels, Instance[] instances, 
       List<DatasetInstance> externalInstances, int[][][] a, double logJoint){
     this.maxent=maxent;
     this.gammas=gammas;
@@ -108,7 +108,7 @@ public class RaykarModel {
     /**
      * run EM to train raykar et al. model
      */
-    public RaykarModel build(){
+    public LogRespModel build(){
       a = Datasets.compileDenseAnnotations(data);
       
       //////////////////
@@ -161,7 +161,7 @@ public class RaykarModel {
       
       } while(iterations < 100 && value - previousValue > 1e-6);
       
-      return new RaykarModel(maxent, gammas, softlabels, instances, externalInstances, a, value);
+      return new LogRespModel(maxent, gammas, softlabels, instances, externalInstances, a, value);
     }
 
     private static double logJoint(PriorSpecification priors, double[][][] gammas, double[][] softlabels, MaxEnt maxent, Instance[] instances, int[][][] a) {
