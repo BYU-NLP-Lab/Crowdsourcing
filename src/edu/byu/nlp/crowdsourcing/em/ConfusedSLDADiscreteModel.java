@@ -69,8 +69,8 @@ import edu.byu.nlp.util.Pair;
  */
 public class ConfusedSLDADiscreteModel {
   private static final Logger logger = LoggerFactory.getLogger(ConfusedSLDADiscreteModel.class);
-  private static final int DEFAULT_TRAINING_ITERATIONS = 25;
-  private static final int HYPERPARAM_TUNING_PERIOD = 25;
+  public static final int DEFAULT_TRAINING_ITERATIONS = 25;
+  public static final int HYPERPARAM_TUNING_PERIOD = 25;
   
   //TODO: the static eta matrix implementation is not totally debugged yet. 
   // bad smells: 1) topic correspondence doesn't always work even with many perfect annotations
@@ -88,21 +88,21 @@ public class ConfusedSLDADiscreteModel {
   public static class State{
     
     // flags
-    private boolean includeMetadataSupervision = false; // if false, reduces to unsupervised LDA
+    boolean includeMetadataSupervision = false; // if false, reduces to unsupervised LDA
     
     // data
-    private Dataset data;
-    private PriorSpecification priors;
+    Dataset data;
+    PriorSpecification priors;
     private double[][][] deltas; // prior over gamma (a function of the priors object)
     private int numTopics; // T: num topics. 
     private int numClasses; // K: num classes. (Derived from data)
-    private int numDocuments; // D: num documents. (Derived from data)
+    int numDocuments; // D: num documents. (Derived from data)
     private int numAnnotators; // J: num annotators. (Derived from data)
     private int numFeatures; // V: num word types. (Derived from data)
 
     // Variable Assignments
-    private int[][] z; // inferred topic assignments (one per doc and word position)
-    private int[] y; // inferred 'true' label assignments (one per doc)
+    int[][] z; // inferred topic assignments (one per doc and word position)
+    int[] y; // inferred 'true' label assignments (one per doc)
     private MaxEnt maxent; // logistic regression weights b.
     
     // static data-derived values
@@ -312,8 +312,12 @@ public class ConfusedSLDADiscreteModel {
       this.rnd = rnd;
       return this;
     }
-    
+
     protected ConfusedSLDADiscreteModel build() {
+      return build(true);
+    }
+    
+    protected ConfusedSLDADiscreteModel build(boolean doTraining) {
       ////////////////////
       // create model 
       ////////////////////
@@ -338,15 +342,17 @@ public class ConfusedSLDADiscreteModel {
       ConfusedSLDADiscreteModel model = new ConfusedSLDADiscreteModel(state);
       maximizeB(state); // ensure that log-linear weights exist
 
-      ////////////////////
-      // train model 
-      ////////////////////
-      ModelTrainer trainer = new ModelTrainer(state);
-      ModelTraining.doOperations(trainingOps, trainer);
-
-      logger.info("Training finished with log joint="+unnormalizedLogJoint(state));
-      logger.info("Final topics");
-      logTopNWordsPerTopic(state, 10);
+      if (doTraining){
+        ////////////////////
+        // train model 
+        ////////////////////
+        ModelTrainer trainer = new ModelTrainer(state);
+        ModelTraining.doOperations(trainingOps, trainer);
+  
+        logger.info("Training finished with log joint="+unnormalizedLogJoint(state));
+        logger.info("Final topics");
+        logTopNWordsPerTopic(state, 10);
+      }
       
       return model;
       
@@ -654,6 +660,10 @@ public class ConfusedSLDADiscreteModel {
   public int[][] getZ(){
     return Matrices.clone(this.state.z);
   }
+  
+  public State getState(){
+    return this.state;
+  }
 
   
   public static void maximizeUntilConvergence(State s, int minNumYChanges, int minNumZChanges, int maxIterations){
@@ -680,8 +690,11 @@ public class ConfusedSLDADiscreteModel {
 
   
 
-
   public Predictions predict(Dataset trainingInstances, Dataset heldoutInstances, RandomGenerator rnd){
+    return predict(state, trainingInstances, heldoutInstances, rnd);
+  }
+
+  public static Predictions predict(State state, Dataset trainingInstances, Dataset heldoutInstances, RandomGenerator rnd){
     // em-derived labels
     List<Prediction> labeledPredictions = Lists.newArrayList();
     List<Prediction> unlabeledPredictions = Lists.newArrayList();
@@ -1144,7 +1157,7 @@ public class ConfusedSLDADiscreteModel {
   /////////////////////////////////////////////////
   // Hyperparameter learning  
   /////////////////////////////////////////////////
-  private static void updateBTheta(State s) {
+  public static void updateBTheta(State s) {
     logger.debug("optimizing btheta in light of most recent topic assignments");
     subtractPriorsFromCounts(s);
     double oldValue = s.priors.getBTheta();
@@ -1156,7 +1169,7 @@ public class ConfusedSLDADiscreteModel {
     logger.info("new btheta="+s.priors.getBTheta()+" old btheta="+oldValue);
   }
 
-  private static void updateBPhi(State s) {
+  public static void updateBPhi(State s) {
     logger.debug("optimizing bphi in light of most recent topic assignments");
     subtractPriorsFromCounts(s);
     double oldValue = s.priors.getBPhi();
@@ -1169,7 +1182,7 @@ public class ConfusedSLDADiscreteModel {
     logger.info("new bphi="+s.priors.getBPhi()+" old bphi="+oldValue);
   }
 
-  private static void updateBGamma(State s) {
+  public static void updateBGamma(State s) {
     logger.debug("optimizing bgamma in light of most recent document labels");
     subtractPriorsFromCounts(s);
     Pair<Double,Double> oldValue = Pair.of(s.deltas[0][0][0], s.deltas[0][0][1]);
