@@ -288,13 +288,15 @@ public class LogRespLDAModel {
         }
         return (double)cumulativeNumChanges;
       }
-      /** {@inheritDoc} */
       @Override
       public DatasetLabeler getIntermediateLabeler() {
-        // TODO Auto-generated method stub
-        return null;
+        return new DatasetLabeler() {
+          @Override
+          public Predictions label(Dataset trainingInstances, Dataset heldoutInstances) {
+            return ConfusedSLDADiscreteModel.predict(state, trainingInstances, heldoutInstances, rnd);
+          }
+        };
       }
-      
     }
 
   } // end builder
