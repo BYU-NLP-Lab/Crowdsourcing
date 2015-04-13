@@ -24,6 +24,7 @@ import com.google.common.base.Preconditions;
 import edu.byu.nlp.classify.data.DatasetLabeler;
 import edu.byu.nlp.classify.eval.Predictions;
 import edu.byu.nlp.classify.util.ModelTraining;
+import edu.byu.nlp.classify.util.ModelTraining.IntermediatePredictionLogger;
 import edu.byu.nlp.classify.util.ModelTraining.SupportsTrainingOperations;
 import edu.byu.nlp.crowdsourcing.ModelInitialization.AssignmentInitializer;
 import edu.byu.nlp.crowdsourcing.ModelInitialization.MatrixAssignmentInitializer;
@@ -82,6 +83,8 @@ public class LogRespLDAModel {
     private String trainingOps;
     private RandomGenerator rnd;
 
+    private IntermediatePredictionLogger intermediatePredictionLogger;
+
     public ModelBuilder(Dataset dataset){
       this.delegate = new ConfusedSLDADiscreteModel.ModelBuilder(dataset);
     }
@@ -118,6 +121,11 @@ public class LogRespLDAModel {
       return this;
     }
     
+    public ModelBuilder setIntermediatePredictionLogger(IntermediatePredictionLogger intermediatePredictionLogger){
+      this.intermediatePredictionLogger=intermediatePredictionLogger;
+      return this;
+    }
+    
     protected LogRespLDAModel build() {
 
       ConfusedSLDADiscreteModel delegateModel = this.delegate.build(false);
@@ -129,7 +137,7 @@ public class LogRespLDAModel {
       // train model 
       ////////////////////
       ModelTrainer trainer = new ModelTrainer(state);
-      ModelTraining.doOperations(trainingOps, trainer);
+      ModelTraining.doOperations(trainingOps, trainer, intermediatePredictionLogger);
 
       logger.info("Training finished with log joint="+ConfusedSLDADiscreteModel.unnormalizedLogJoint(state));
       logger.info("Final topics");

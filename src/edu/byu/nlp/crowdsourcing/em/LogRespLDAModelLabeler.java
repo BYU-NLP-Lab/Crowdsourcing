@@ -19,6 +19,7 @@ import org.apache.commons.math3.random.RandomGenerator;
 
 import edu.byu.nlp.classify.data.DatasetLabeler;
 import edu.byu.nlp.classify.eval.Predictions;
+import edu.byu.nlp.classify.util.ModelTraining.IntermediatePredictionLogger;
 import edu.byu.nlp.crowdsourcing.ModelInitialization.AssignmentInitializer;
 import edu.byu.nlp.crowdsourcing.ModelInitialization.MatrixAssignmentInitializer;
 import edu.byu.nlp.crowdsourcing.PriorSpecification;
@@ -34,7 +35,7 @@ public class LogRespLDAModelLabeler implements DatasetLabeler{
   private LogRespLDAModel model;
 
   public LogRespLDAModelLabeler(Dataset data, int numTopics, String trainingOps, MatrixAssignmentInitializer zInitializer, AssignmentInitializer yInitializer, 
-      PriorSpecification priors, RandomGenerator rnd){
+      PriorSpecification priors, IntermediatePredictionLogger predictionLogger, RandomGenerator rnd){
     this.rnd=rnd;
     this.model = new LogRespLDAModel.ModelBuilder(data)
         .setNumTopics(numTopics)
@@ -43,6 +44,7 @@ public class LogRespLDAModelLabeler implements DatasetLabeler{
         .setYInitializer(yInitializer)
         .setZInitializer(zInitializer)
         .setTrainingOps(trainingOps)
+        .setIntermediatePredictionLogger(predictionLogger)
         .build();
   }
   

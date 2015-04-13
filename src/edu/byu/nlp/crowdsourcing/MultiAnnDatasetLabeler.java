@@ -27,6 +27,7 @@ import edu.byu.nlp.classify.data.DatasetBuilder;
 import edu.byu.nlp.classify.data.DatasetLabeler;
 import edu.byu.nlp.classify.eval.Predictions;
 import edu.byu.nlp.classify.util.ModelTraining;
+import edu.byu.nlp.classify.util.ModelTraining.IntermediatePredictionLogger;
 import edu.byu.nlp.crowdsourcing.MultiAnnModelBuilders.MultiAnnModelBuilder;
 import edu.byu.nlp.crowdsourcing.gibbs.BlockCollapsedMultiAnnModelMath;
 import edu.byu.nlp.crowdsourcing.gibbs.BlockCollapsedMultiAnnModelMath.DiagonalizationMethod;
@@ -53,6 +54,8 @@ public class MultiAnnDatasetLabeler implements DatasetLabeler{
   private RandomGenerator rnd;
   private PrintWriter debugOut;
   private MultiAnnModel model;
+
+  private IntermediatePredictionLogger predictionLogger;
 
 
   public static enum DocWeightAlgorithm{
@@ -152,6 +155,7 @@ public class MultiAnnDatasetLabeler implements DatasetLabeler{
 		boolean diagonalizationWithFullConfusionMatrix,
 		int goldInstancesForDiagonalization, Dataset trainingData,
 		String unannotatedDocumentWeight,
+		IntermediatePredictionLogger predictionLogger,
 		RandomGenerator algRnd) {
     // TODO (pfelt): in the future we'll probably want to NOT pass in the builder, but create a new builder 
     // for every label() request. The only problem with that right now is that it's not clear how
@@ -165,6 +169,7 @@ public class MultiAnnDatasetLabeler implements DatasetLabeler{
     this.statsOut=(statsOut==null)? new PrintWriter(ByteStreams.nullOutputStream()): statsOut;
     this.debugOut=(debugOut==null)? new PrintWriter(ByteStreams.nullOutputStream()): debugOut;
     this.unannotatedDocumentWeight=unannotatedDocumentWeight;
+    this.predictionLogger=predictionLogger;
     this.rnd=algRnd;
     
     this.data=trainingData; // should get rid of this after we figure out how to pass instances into the label() method
@@ -191,7 +196,7 @@ public class MultiAnnDatasetLabeler implements DatasetLabeler{
       builder.setDocumentWeights(docWeights);
       // train
       model = builder.build();
-      ModelTraining.doOperations(trainingOperations, model);
+      ModelTraining.doOperations(trainingOperations, model, predictionLogger);
     }
     
     // record model

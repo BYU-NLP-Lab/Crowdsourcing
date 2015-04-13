@@ -39,6 +39,7 @@ import edu.byu.nlp.classify.eval.BasicPrediction;
 import edu.byu.nlp.classify.eval.Prediction;
 import edu.byu.nlp.classify.eval.Predictions;
 import edu.byu.nlp.classify.util.ModelTraining;
+import edu.byu.nlp.classify.util.ModelTraining.IntermediatePredictionLogger;
 import edu.byu.nlp.classify.util.ModelTraining.SupportsTrainingOperations;
 import edu.byu.nlp.crowdsourcing.CrowdsourcingUtils;
 import edu.byu.nlp.crowdsourcing.ModelInitialization.AssignmentInitializer;
@@ -279,6 +280,7 @@ public class ConfusedSLDADiscreteModel {
     private MatrixAssignmentInitializer zInitializer;
     private String trainingOps;
     private RandomGenerator rnd;
+    private IntermediatePredictionLogger intermediatePredictionLogger;
 
     public ModelBuilder(Dataset dataset){
       this.data=dataset;
@@ -311,6 +313,11 @@ public class ConfusedSLDADiscreteModel {
 
     public ModelBuilder setRandomGenerator(RandomGenerator rnd){
       this.rnd = rnd;
+      return this;
+    }
+    
+    public ModelBuilder setIntermediatePredictionLogger(IntermediatePredictionLogger intermediatePredictionLogger){
+      this.intermediatePredictionLogger=intermediatePredictionLogger;
       return this;
     }
 
@@ -348,7 +355,7 @@ public class ConfusedSLDADiscreteModel {
         // train model 
         ////////////////////
         ModelTrainer trainer = new ModelTrainer(state);
-        ModelTraining.doOperations(trainingOps, trainer);
+        ModelTraining.doOperations(trainingOps, trainer, intermediatePredictionLogger);
   
         logger.info("Training finished with log joint="+unnormalizedLogJoint(state));
         logger.info("Final topics");

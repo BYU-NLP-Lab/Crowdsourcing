@@ -24,6 +24,7 @@ import edu.byu.nlp.classify.eval.BasicPrediction;
 import edu.byu.nlp.classify.eval.Prediction;
 import edu.byu.nlp.classify.eval.Predictions;
 import edu.byu.nlp.classify.util.ModelTraining;
+import edu.byu.nlp.classify.util.ModelTraining.IntermediatePredictionLogger;
 import edu.byu.nlp.crowdsourcing.CrowdsourcingUtils;
 import edu.byu.nlp.crowdsourcing.MultiAnnModel;
 import edu.byu.nlp.crowdsourcing.MultiAnnModelBuilders.MultiAnnModelBuilder;
@@ -43,10 +44,12 @@ public class MeanFieldMultiAnnLabeler implements DatasetLabeler{
   private MultiAnnModelBuilder modelBuilder;
   private MultiAnnModel model;
   private String trainingOperations;
+  private IntermediatePredictionLogger intermediatePredictionLogger;
 
-  public MeanFieldMultiAnnLabeler(MultiAnnModelBuilder modelBuilder, String trainingOperations) {
+  public MeanFieldMultiAnnLabeler(MultiAnnModelBuilder modelBuilder, String trainingOperations, IntermediatePredictionLogger intermediatePredictionLogger) {
     this.modelBuilder=modelBuilder;
     this.trainingOperations=trainingOperations;
+    this.intermediatePredictionLogger=intermediatePredictionLogger;
   }
   public MeanFieldMultiAnnLabeler(MultiAnnModel model) {
     this.model=model;
@@ -58,7 +61,7 @@ public class MeanFieldMultiAnnLabeler implements DatasetLabeler{
     // if necessary, build and train a model 
     if (this.model == null){
       model = modelBuilder.build();
-      ModelTraining.doOperations(trainingOperations, model);
+      ModelTraining.doOperations(trainingOperations, model, intermediatePredictionLogger);
     }
     
     MeanFieldMultiAnnState state = (MeanFieldMultiAnnState) model.getCurrentState();
