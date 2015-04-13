@@ -26,6 +26,8 @@ import cc.mallet.types.Dirichlet;
 
 import com.google.common.collect.Lists;
 
+import edu.byu.nlp.classify.data.DatasetLabeler;
+import edu.byu.nlp.classify.eval.Predictions;
 import edu.byu.nlp.crowdsourcing.CrowdsourcingUtils;
 import edu.byu.nlp.crowdsourcing.MultiAnnModel;
 import edu.byu.nlp.crowdsourcing.MultiAnnModelBuilders.AbstractMultiAnnModelBuilder;
@@ -900,6 +902,19 @@ public class MeanFieldMultiRespModel extends AbstractMeanFieldMultiAnnModel {
     System.out.println(Dirichlet.digamma(1000));
   }
 
+
+  /** {@inheritDoc} */
+  @Override
+  public DatasetLabeler getIntermediateLabeler() {
+    final MultiAnnModel thisModel = this;
+    return new DatasetLabeler() {
+      @Override
+      public Predictions label(Dataset trainingInstances, Dataset heldoutInstances) {
+        return new MeanFieldMultiAnnLabeler(thisModel).label(trainingInstances, heldoutInstances);
+      }
+    };
+  }
+  
 
   
 }

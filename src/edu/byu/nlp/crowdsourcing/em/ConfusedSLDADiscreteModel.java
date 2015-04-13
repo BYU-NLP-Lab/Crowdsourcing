@@ -34,6 +34,7 @@ import cc.mallet.types.LabelAlphabet;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
 
+import edu.byu.nlp.classify.data.DatasetLabeler;
 import edu.byu.nlp.classify.eval.BasicPrediction;
 import edu.byu.nlp.classify.eval.Prediction;
 import edu.byu.nlp.classify.eval.Predictions;
@@ -365,74 +366,58 @@ public class ConfusedSLDADiscreteModel {
       }
       /** {@inheritDoc} */
       @Override
-      public void sample(String variableName, String[] args) {
+      public Double sample(String variableName, int iteration, String[] args) {
         // assume that all sampling should be done wrt the the current state of the other variables
         // (never ignore metadata supervision)
         state.includeMetadataSupervision = true;
         
         Preconditions.checkNotNull(variableName);
-        Preconditions.checkArgument(args.length>=1);
-        int numIterations = Integer.parseInt(args[0]);
         
         // Joint
         if (variableName.equals("all")){
           // sample topics and class labels jointly (SLOW)
-//          state.includeMetadataSupervision = true;
-          for (int i=0; i<numIterations; i++){
-            logger.debug("maximizing log-linear weights B iteration "+i);
-            maximizeB(state); 
-            logger.debug("sampling class label vector Y iteration "+i);
-            sampleY(state, rnd);
-            logger.debug("sampling topic matrix Z iteration "+i);
-            sampleZ(state, rnd);
-            // periodically tune hypers and report joint
-            if (i%HYPERPARAM_TUNING_PERIOD==0){
-              logger.info("sample Y+Z+B iteration "+i+" with (unnormalized) log joint "+unnormalizedLogJoint(state));
-              if (state.priors.getInlineHyperparamTuning()){
-                updateBTheta(state);
-                updateBPhi(state);
-                updateBGamma(state);
-              }
+//        state.includeMetadataSupervision = true;
+          logger.debug("maximizing log-linear weights B iteration "+iteration);
+          maximizeB(state); 
+          logger.debug("sampling class label vector Y iteration "+iteration);
+          sampleY(state, rnd);
+          logger.debug("sampling topic matrix Z iteration "+iteration);
+          sampleZ(state, rnd);
+          // periodically tune hypers and report joint
+          if (iteration%HYPERPARAM_TUNING_PERIOD==0){
+            if (state.priors.getInlineHyperparamTuning()){
+              updateBTheta(state);
+              updateBPhi(state);
+              updateBGamma(state);
             }
           }
-          logger.info("finished sampling "+numIterations+" times with (unnormalized) log joint "+unnormalizedLogJoint(state));
         }
         // Y
         else if (variableName.toLowerCase().equals("y")){
-//          state.includeMetadataSupervision = false;
-          for (int i=0; i<numIterations; i++){
-            sampleY(state, rnd);
-            logger.debug("sample Y+B iteration "+i);
-            // periodically tune hypers and report joint
-            if (i%HYPERPARAM_TUNING_PERIOD==0){
-              logger.info("maximizing log-linear weights B iteration "+i);
-              maximizeB(state); 
-              logger.info("sample Y+B iteration "+i+" with (unnormalized) log joint "+unnormalizedLogJoint(state));
-              if (state.priors.getInlineHyperparamTuning()){
-                updateBGamma(state);
-              }
+//        state.includeMetadataSupervision = false;
+          sampleY(state, rnd);
+          logger.debug("sample Y+B iteration "+iteration);
+          // periodically tune hypers and report joint
+          if (iteration%HYPERPARAM_TUNING_PERIOD==0){
+            maximizeB(state); 
+            if (state.priors.getInlineHyperparamTuning()){
+              updateBGamma(state);
             }
           }
-          logger.info("finished sampling Y+B "+numIterations+" times with (unnormalized) log joint "+unnormalizedLogJoint(state));
         }
         // Z
         else if (variableName.toLowerCase().equals("z")){
-//          state.includeMetadataSupervision = false;
-          for (int i=0; i<numIterations; i++){
-            sampleZ(state, rnd);
-            logger.debug("sample Z+B iteration "+i);
-            // periodically tune hypers and report joint
-            if (i%HYPERPARAM_TUNING_PERIOD==0){
-              logger.info("maximizing log-linear weights B iteration "+i);
-              maximizeB(state); 
-              logger.info("sample Z+B iteration "+i+" with (unnormalized) log joint "+unnormalizedLogJoint(state));
-              if (state.priors.getInlineHyperparamTuning()){
-                updateBTheta(state);
-                updateBPhi(state);
-              }
+//        state.includeMetadataSupervision = false;
+          sampleZ(state, rnd);
+          logger.debug("sample Z+B iteration "+iteration);
+          // periodically tune hypers and report joint
+          if (iteration%HYPERPARAM_TUNING_PERIOD==0){
+            maximizeB(state); 
+            if (state.priors.getInlineHyperparamTuning()){
+              updateBTheta(state);
+              updateBPhi(state);
             }
           }
-          logger.info("finished sampling Z+B "+numIterations+" times with (unnormalized) log joint "+unnormalizedLogJoint(state));
         }
         // B
         else if (variableName.toLowerCase().equals("b")){
@@ -441,15 +426,26 @@ public class ConfusedSLDADiscreteModel {
         else{
           throw new IllegalArgumentException("unknown variable name "+variableName);
         }
+        
+        // for efficiency, only calculate objective value periodically
+        if (iteration%HYPERPARAM_TUNING_PERIOD==0){
+          return unnormalizedLogJoint(state);
+        }
+        return null;
       }
 
+      private int cumulativeNumChanges = 0;
       /** {@inheritDoc} */
       @Override
-      public void maximize(String variableName, String[] args) {
-        Preconditions.checkNotNull(variableName,"training operations must reference a specific variable (e.g., maximize-all, sample-y, etc)");
-        int maxNumIterations = (args.length>=1)? Integer.parseInt(args[0]): DEFAULT_TRAINING_ITERATIONS;
-
-        // assume that all sampling should be done wrt the the current state of the other variables
+      public Double maximize(String variableName, int iteration, String[] args) {
+        Preconditions.checkNotNull(variableName);
+        
+        // reset the cumulative number of changes
+        if (iteration==0){
+          cumulativeNumChanges = 0;
+        }
+        
+        // assume that all maximization should be done wrt the the current state of the other variables
         // (never ignore metadata supervision)
         state.includeMetadataSupervision = true;
         
@@ -457,29 +453,58 @@ public class ConfusedSLDADiscreteModel {
         if (variableName.equals("all")){
           // maximize topics and class labels jointly (SLOW)
 //          state.includeMetadataSupervision = true;
-          maximizeUntilConvergence(state, 0, 0, maxNumIterations); 
+          
+          logger.debug("maximizing log-linear model parameters b iteration "+iteration);
+          maximizeB(state); // set maxent model weights
+          logger.debug("maximizing topic assignments Z iteration "+iteration);
+          cumulativeNumChanges += maximizeZ(state); // set topic assignments
+          logger.debug("maximizing inferred labels Y iteration "+iteration);
+          cumulativeNumChanges += maximizeY(state); // set inferred label values
+          // tune hyperparams
+          updateBTheta(state);
+          updateBPhi(state);
+          updateBGamma(state);
+          
 //          logTopNWordsPerTopic(state, 10);
         }
         // Y
         else if (variableName.toLowerCase().equals("y")){ 
           // maximize class labels independently (FAST)
 //          state.includeMetadataSupervision = false;
-          maximizeYUntilConvergence(state, 0, maxNumIterations);
+          logger.debug("maximizing inferred labels Y iteration "+iteration);
+          cumulativeNumChanges += maximizeY(state); // set inferred label values
+          // update hyperparam
+          updateBGamma(state);
         }
         // Z
         else if (variableName.toLowerCase().equals("z")){
           // maximize topics independently (FAST)
 //          state.includeMetadataSupervision = false;
-          maximizeZUntilConvergence(state, 0, maxNumIterations);
+          logger.debug("maximizing topic assignments Z iteration "+iteration);
+          cumulativeNumChanges += maximizeZ(state); // set topic assignments
+          // tune hyperparams
+          updateBTheta(state);
+          updateBPhi(state);
         }
         // B
         else if (variableName.toLowerCase().equals("b")){
           // maximize log linear model independently 
+          logger.debug("maximizing regression vector B iteration "+iteration);
           maximizeB(state);
         }
         else{
           throw new IllegalArgumentException("unknown variable name "+variableName);
         }
+        return (double)cumulativeNumChanges;
+      }
+      @Override
+      public DatasetLabeler getIntermediateLabeler() {
+        return new DatasetLabeler() {
+          @Override
+          public Predictions label(Dataset trainingInstances, Dataset heldoutInstances) {
+            return predict(state, trainingInstances, heldoutInstances, rnd);
+          }
+        };
       }
       
     }
@@ -666,27 +691,6 @@ public class ConfusedSLDADiscreteModel {
   }
 
   
-  public static void maximizeUntilConvergence(State s, int minNumYChanges, int minNumZChanges, int maxIterations){
-    int numYChanges = Integer.MAX_VALUE;
-    int numZChanges = Integer.MAX_VALUE;
-    int iterations = 0;
-    while ((numYChanges > minNumYChanges || numZChanges > minNumZChanges) && iterations < maxIterations){
-      logger.debug("maximizing log-linear model parameters b iteration "+iterations);
-      maximizeB(s); // set maxent model weights
-      logger.debug("maximizing topic assignments Z iteration "+iterations);
-      numZChanges = maximizeZ(s); // set topic assignments
-      logger.debug("maximizing inferred labels Y iteration "+iterations);
-      numYChanges = maximizeY(s); // set inferred label values
-      logger.info("maximization of B+Z+Y iteration "+iterations+" with "+numYChanges+" Y changes and "+numZChanges+" Z changes with (unnormalized) joint "+unnormalizedLogJoint(s));
-      // tune hyperparams
-      updateBTheta(s);
-      updateBPhi(s);
-      updateBGamma(s);
-      
-      iterations++;
-    }
-    logger.info("finished maximization after "+iterations+" iterations");
-  }
 
   
 
@@ -813,19 +817,6 @@ public class ConfusedSLDADiscreteModel {
     s.countOfTopic[topic] += 1;
   }
   
-  public static void maximizeZUntilConvergence(State s, int minNumChanges, int maxIterations){
-    int numChanges = Integer.MAX_VALUE;
-    int iterations = 0;
-    while (numChanges>minNumChanges && iterations<maxIterations){
-      numChanges = maximizeZ(s); // set topic assignments
-      logger.info("maximizing Z iteration "+iterations+" with "+numChanges+" changes and (unnormalized) joint "+unnormalizedLogJoint(s));      
-      // tune hyperparams
-      updateBTheta(s);
-      updateBPhi(s);
-      iterations++;
-    }
-    logger.info("finished maximizing Z after "+iterations+" iterations");
-  }
 
   public static int maximizeZ(State s){
     int numChanges = 0;
@@ -967,18 +958,6 @@ public class ConfusedSLDADiscreteModel {
     }
   }
 
-  public static void maximizeYUntilConvergence(State s, int minNumChanges, int maxIterations){
-    int numChanges = Integer.MAX_VALUE;
-    int iterations = 0;
-    while (numChanges>minNumChanges && iterations<maxIterations){
-      numChanges = maximizeY(s); // set inferred label values
-      logger.info("maximizing Y iteration "+iterations+" with "+numChanges+" changes and (unnormalized) joint "+unnormalizedLogJoint(s));
-      // update hyperparam
-      updateBGamma(s);
-      iterations++;
-    }
-    logger.info("finished maximizing Y after "+iterations+" iterations");
-  }
   
   public static int maximizeY(State s){
     int numChanges = 0;

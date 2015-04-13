@@ -15,7 +15,6 @@
  */
 package edu.byu.nlp.crowdsourcing;
 
-import java.io.IOException;
 import java.io.PrintWriter;
 
 import org.apache.commons.math3.random.RandomGenerator;
@@ -53,6 +52,7 @@ public class MultiAnnDatasetLabeler implements DatasetLabeler{
   private String unannotatedDocumentWeight;
   private RandomGenerator rnd;
   private PrintWriter debugOut;
+  private MultiAnnModel model;
 
 
   public static enum DocWeightAlgorithm{
@@ -123,7 +123,25 @@ public class MultiAnnDatasetLabeler implements DatasetLabeler{
 //      return binaryDatasetBuilder.buildDataset(instances, null);
 //    }
   }
-  
+
+  public MultiAnnDatasetLabeler(MultiAnnModel model, 
+    PrintWriter debugOut,
+    boolean predictSingleLastSample, 
+    DiagonalizationMethod diagonalizationMethod,
+    boolean diagonalizationWithFullConfusionMatrix,
+    int goldInstancesForDiagonalization, Dataset trainingData,
+    RandomGenerator algRnd) {
+    this.model = model;
+    this.predictSingleLastSample = predictSingleLastSample;
+    this.diagonalizationMethod=diagonalizationMethod;
+    this.diagonalizationWithFullConfusionMatrix=diagonalizationWithFullConfusionMatrix;
+    this.goldInstancesForDiagonalization=goldInstancesForDiagonalization;
+    this.statsOut=(statsOut==null)? new PrintWriter(ByteStreams.nullOutputStream()): statsOut;
+    this.debugOut=(debugOut==null)? new PrintWriter(ByteStreams.nullOutputStream()): debugOut;
+    this.rnd=algRnd;
+    
+    this.data=trainingData; // should get rid of this after we figure out how to pass instances into the label() method
+  }
   /**
    * @param gold for computing confusion matrices for debugging
    */
@@ -164,12 +182,21 @@ public class MultiAnnDatasetLabeler implements DatasetLabeler{
     // set is mutated
 //    MultiAnnModelBuilder builder = MultiAnnModel.newModelBuilderWithUniform(priors, trainingData, rnd); 
     
-    // calculate a weight for each document
-    double[] docWeights = new double[data.getInfo().getNumDocuments()];
-    calculateDocumentWeights(unannotatedDocumentWeight, docWeights);
     
-    // Train a new model
-    MultiAnnModel model = buildModel(docWeights);
+    // Train a new model (if necessary)
+    if (this.model==null){
+      // calculate a weight for each document
+      double[] docWeights = new double[data.getInfo().getNumDocuments()];
+      calculateDocumentWeights(unannotatedDocumentWeight, docWeights);
+      builder.setDocumentWeights(docWeights);
+      // train
+      model = builder.build();
+      ModelTraining.doOperations(trainingOperations, model);
+    }
+    
+    // record model
+    model.getCurrentState().longDescription(debugOut);
+    
     
     // Use it to predict
     return predict(model, data, heldoutData);
@@ -211,21 +238,6 @@ public class MultiAnnDatasetLabeler implements DatasetLabeler{
 		return predictor.predict(heldoutData);
 	}
 
-  // TODO: public for sanity test convenience. Should refactor at some point 
-  public MultiAnnModel buildModel(double[] docWeights){
-    
-    builder.setDocumentWeights(docWeights);
-    MultiAnnModel model = builder.build();
-    
-    // train
-    ModelTraining.doOperations(trainingOperations, model);
-    
-    // record model
-    model.getCurrentState().longDescription(debugOut);
-    
-    return model;
-  }
-  
 
 
   private MultiAnnState goldsample = null; // cache gold labels based on sample identity--a minor optimization

@@ -13,16 +13,23 @@
  */
 package edu.byu.nlp.crowdsourcing.gibbs;
 
+import java.io.PrintWriter;
 import java.util.Map;
 
 import org.apache.commons.math3.random.RandomGenerator;
 import org.apache.commons.math3.special.Gamma;
 import org.fest.util.VisibleForTesting;
 
+import com.google.common.io.ByteStreams;
+
+import edu.byu.nlp.classify.data.DatasetLabeler;
+import edu.byu.nlp.classify.eval.Predictions;
 import edu.byu.nlp.crowdsourcing.MultiAnnModel;
 import edu.byu.nlp.crowdsourcing.MultiAnnModelBuilders.AbstractMultiAnnModelBuilder;
 import edu.byu.nlp.crowdsourcing.MultiAnnState;
 import edu.byu.nlp.crowdsourcing.MultiAnnState.CollapsedNeuteredMultiAnnState;
+import edu.byu.nlp.crowdsourcing.gibbs.BlockCollapsedMultiAnnModelMath.DiagonalizationMethod;
+import edu.byu.nlp.crowdsourcing.MultiAnnDatasetLabeler;
 import edu.byu.nlp.crowdsourcing.PriorSpecification;
 import edu.byu.nlp.crowdsourcing.TrainableMultiAnnModel;
 import edu.byu.nlp.data.types.Dataset;
@@ -452,5 +459,18 @@ public class BlockCollapsedMultiAnnModelNeutered extends TrainableMultiAnnModel 
     return diagonMatrixAverager;
   }
 
+  /** {@inheritDoc} */
+  @Override
+  public DatasetLabeler getIntermediateLabeler() {
+    final MultiAnnModel thisModel = this;
+    return new DatasetLabeler() {
+      @Override
+      public Predictions label(Dataset trainingInstances, Dataset heldoutInstances) {
+        return new MultiAnnDatasetLabeler(thisModel, 
+            new PrintWriter(ByteStreams.nullOutputStream()), 
+            true, DiagonalizationMethod.NONE, false, 0, trainingInstances, rnd).label(trainingInstances, heldoutInstances);
+      }
+    };
+  }
 
 }

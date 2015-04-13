@@ -38,24 +38,28 @@ import edu.byu.nlp.util.Matrices;
  * @author pfelt
  * 
  */
-public class MeanFieldLabeler implements DatasetLabeler{
+public class MeanFieldMultiAnnLabeler implements DatasetLabeler{
 
   private MultiAnnModelBuilder modelBuilder;
   private MultiAnnModel model;
   private String trainingOperations;
 
-  public MeanFieldLabeler(MultiAnnModelBuilder modelBuilder, String trainingOperations) {
+  public MeanFieldMultiAnnLabeler(MultiAnnModelBuilder modelBuilder, String trainingOperations) {
     this.modelBuilder=modelBuilder;
     this.trainingOperations=trainingOperations;
   }
-
+  public MeanFieldMultiAnnLabeler(MultiAnnModel model) {
+    this.model=model;
+  }
+  
   /** {@inheritDoc} */
   @Override
   public Predictions label(Dataset trainingInstances, Dataset heldoutInstances) {
-    model = modelBuilder.build();
-
-    // train
-    ModelTraining.doOperations(trainingOperations, model);
+    // if necessary, build and train a model 
+    if (this.model == null){
+      model = modelBuilder.build();
+      ModelTraining.doOperations(trainingOperations, model);
+    }
     
     MeanFieldMultiAnnState state = (MeanFieldMultiAnnState) model.getCurrentState();
     Dataset data = state.getData();

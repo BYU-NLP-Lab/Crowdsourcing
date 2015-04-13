@@ -19,14 +19,15 @@ package edu.byu.nlp.crowdsourcing;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.google.common.base.Preconditions;
-
 /**
  * @author pfelt
  */
 public abstract class TrainableMultiAnnModel implements MultiAnnModel {
   private static final Logger logger = LoggerFactory.getLogger(TrainableMultiAnnModel.class);
 
+  private static final int NUM_SAMPLES_PER_JOINT_CALCULATION = 25;
+  public static final int MAXIMIZE_BATCH_SIZE = 3;
+  
   public abstract void sample();
 
   public abstract void sampleY();
@@ -41,108 +42,46 @@ public abstract class TrainableMultiAnnModel implements MultiAnnModel {
 
   public abstract void setTemp(double temp);
 
+  /** {@inheritDoc} */
   @Override
-  public void sample(String variableName, String[] args) {
-    // get args (num_samples; temp)
-    Preconditions
-        .checkArgument(args.length >= 1,
-            "Must specify number of samples. Sampling until convergence is not supported.");
-    int numSamples = Integer.parseInt(args[0]);
-
+  public Double sample(String variableName, int iteration, String[] args) {
+    // get args (temp)
     double temp = 1;
-    if (args.length >= 2) {
-      temp = Double.parseDouble(args[1]);
+    if (args.length >= 1) {
+      temp = Double.parseDouble(args[0]);
     }
     setTemp(temp);
+    logger.debug("sampling at annealing temp " + temp);
 
     if (variableName.toLowerCase().equals("y")) {
-      for (int s = 0; s < numSamples; s++) {
-        sampleY();
-      }
+      sampleY();
     } else if (variableName.toLowerCase().equals("m")) {
-      for (int s = 0; s < numSamples; s++) {
-        sampleM();
-      }
+      sampleM();
     } else if (variableName.toLowerCase().equals("all")) {
-      for (int s = 0; s < numSamples; s++) {
-        sample();
-      }
+      sample();
     } else {
       throw new IllegalArgumentException(
           "cannot sample from unknown variable name: " + variableName);
     }
-
-    logger.info(numSamples + " samples at annealing temp " + temp
-        + " gives LogJoint=" + logJoint());
+    if (iteration%NUM_SAMPLES_PER_JOINT_CALCULATION==0){
+      return logJoint();
+    }
+    return null;
   }
 
   @Override
-  public void maximize(String variableName, String[] args) {
-    Preconditions.checkNotNull(args);
-
-    int numIterations = -1;
-    // maximize until convergence
-    if (args.length == 0) {
-      numIterations = maximizeUntilConvergence();
-    }
-    // maximize for num_iterations
-    else {
-      numIterations = Integer.parseInt(args[0]);
-
-      if (variableName.toLowerCase().equals("y")) {
-        for (int s = 0; s < numIterations; s++) {
-          maximizeY();
-        }
-      } else if (variableName.toLowerCase().equals("m")) {
-        for (int s = 0; s < numIterations; s++) {
-          maximizeM();
-        }
-      } else if (variableName.toLowerCase().equals("all")) {
-        for (int s = 0; s < numIterations; s++) {
-          maximize();
-        }
-      } else {
-        throw new IllegalArgumentException(
-            "cannot maximize by unknown variable name: " + variableName);
-      }
-    }
-    logger.info("Maximization for " + numIterations
-        + " iterations gives LogJoint=" + logJoint());
-  }
-
-  public static final double MAXIMIZE_IMPROVEMENT_THRESHOLD = 1e-6;
-  public static final int MAXIMIZE_MAX_ITERATIONS = 20;
-  public static final int MAXIMIZE_BATCH_SIZE = 3;
-
-  private int maximizeUntilConvergence() {
-    int iterations = 0;
-    double prevJoint = logJoint();
-    logger.info("Initialized Log Joint=" + prevJoint);
-    double improvement = Double.MAX_VALUE;
-    do {
-      // optimize
+  public Double maximize(String variableName, int iteration, String[] args) {
+    if (variableName.toLowerCase().equals("y")) {
+      maximizeY();
+    } else if (variableName.toLowerCase().equals("m")) {
+      maximizeM();
+    } else if (variableName.toLowerCase().equals("all")) {
       maximize();
-      // check for convergence every few cycles
-      if (iterations % MAXIMIZE_BATCH_SIZE == 0) {
-        double newJoint = logJoint();
-        logger.info("iteration " + iterations + " Log Joint=" + newJoint);
-        improvement = newJoint - prevJoint;
-        // pfelt: this sanity check breaks when you start doing document
-        // weighting
-        // (since doc weighting isn't implemented in the logProb method)
-        // it also can throw spurious warnings when a method is very close to
-        // convergence
-        if (improvement < 0) { // sanity check
-          logger.warn(getClass().getName() + ": Model got worse ("
-              + improvement + ") after maximizing. This should never happen.");
-        }
-        prevJoint = newJoint;
-      }
-      ++iterations;
-      // } while(iterations < 10);
-    } while (improvement > MAXIMIZE_IMPROVEMENT_THRESHOLD
-        && iterations < MAXIMIZE_MAX_ITERATIONS);
-    return iterations;
+    } else {
+      throw new IllegalArgumentException(
+          "cannot maximize by unknown variable name: " + variableName);
+    }
+    return logJoint();
   }
 
 }
