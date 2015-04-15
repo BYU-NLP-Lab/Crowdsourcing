@@ -186,6 +186,7 @@ public class LogRespLDAModel {
         }
         // Y
         else if (variableName.toLowerCase().equals("y")){
+          state.includeMetadataSupervision = true;
           ConfusedSLDADiscreteModel.sampleY(state, rnd);
           logger.debug("sample Y+B iteration "+iteration);
           // periodically tune hypers and report joint
@@ -259,7 +260,6 @@ public class LogRespLDAModel {
         }
         // Y
         else if (variableName.toLowerCase().equals("y")){ 
-          // maximize class labels independently (FAST)
           state.includeMetadataSupervision = true;
           logger.debug("maximizing inferred labels Y iteration "+iteration);
           cumulativeNumChanges += ConfusedSLDADiscreteModel.maximizeY(state); // set inferred label values
@@ -268,7 +268,6 @@ public class LogRespLDAModel {
         }
         // Z
         else if (variableName.toLowerCase().equals("z")){
-          // maximize topics independently (FAST)
           state.includeMetadataSupervision = false;
           logger.debug("maximizing topic assignments Z iteration "+iteration);
           cumulativeNumChanges += ConfusedSLDADiscreteModel.maximizeZ(state); // set topic assignments
@@ -278,8 +277,6 @@ public class LogRespLDAModel {
         }
         // B
         else if (variableName.toLowerCase().equals("b")){
-          // maximize log linear model independently 
-          state.includeMetadataSupervision = true;
           logger.debug("maximizing regression vector B iteration "+iteration);
           ConfusedSLDADiscreteModel.maximizeB(state);
         }
