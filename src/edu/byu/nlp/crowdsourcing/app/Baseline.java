@@ -20,7 +20,6 @@ import java.util.List;
 
 import org.apache.commons.math3.random.MersenneTwister;
 import org.apache.commons.math3.random.RandomGenerator;
-import org.apache.commons.vfs2.FileSystemException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -30,6 +29,7 @@ import edu.byu.nlp.classify.NaiveBayesClassifier;
 import edu.byu.nlp.classify.NaiveBayesLearner;
 import edu.byu.nlp.crowdsourcing.TrainableMultiAnnModel;
 import edu.byu.nlp.data.docs.CountCutoffFeatureSelectorFactory;
+import edu.byu.nlp.data.docs.DocPipes.Doc2FeaturesMethod;
 import edu.byu.nlp.data.docs.DocumentDatasetBuilder;
 import edu.byu.nlp.data.docs.TokenizerPipes;
 import edu.byu.nlp.data.pipes.EmailHeaderStripper;
@@ -159,7 +159,7 @@ public class Baseline {
 //    return data;
 //  }
 
-  private static Dataset readData(RandomGenerator rnd) throws FileSystemException {
+  private static Dataset readData(RandomGenerator rnd) throws IOException {
     Function<String, String> docTransform = null;
     switch(datasetType){
     case NB2:
@@ -177,7 +177,7 @@ public class Baseline {
     Function<List<String>, List<String>> tokenTransform = null; // FIXME
     Dataset data =
         new DocumentDatasetBuilder(basedir, dataset, split, docTransform,
-            TokenizerPipes.McCallumAndNigam(), tokenTransform , new CountCutoffFeatureSelectorFactory<String>(featureCountCutoff))
+            TokenizerPipes.McCallumAndNigam(), tokenTransform, Doc2FeaturesMethod.WORD_COUNTS, new CountCutoffFeatureSelectorFactory<String>(featureCountCutoff))
             .dataset();
     data.shuffle(rnd);
 

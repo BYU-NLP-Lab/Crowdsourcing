@@ -19,7 +19,7 @@ import static java.lang.Math.log;
 import static org.apache.commons.math3.special.Gamma.logGamma;
 import static org.fest.assertions.Assertions.assertThat;
 
-import java.io.FileNotFoundException;
+import java.io.IOException;
 import java.util.Iterator;
 import java.util.Map;
 
@@ -287,7 +287,7 @@ public class BlockCollapsedMultiAnnModelTest {
   }
   
   @Test
-  public void testJSONData() throws FileNotFoundException{
+  public void testJSONData() throws IOException{
     
     Dataset data = JsonDatasetMocker.buildTestDatasetFromJson(JsonDatasetMocker.jsonInstances1(System.currentTimeMillis()));
     RandomGenerator rnd = new MersenneTwister(1);

@@ -17,7 +17,7 @@ package edu.byu.nlp.crowdsourcing;
 
 import static org.fest.assertions.Assertions.assertThat;
 
-import java.io.FileNotFoundException;
+import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -50,7 +50,7 @@ import edu.byu.nlp.util.Matrices;
 public class ModelInitializationTest {
 
   @Test
-  public void testBaselineAssignmentInitializer() throws FileNotFoundException {
+  public void testBaselineAssignmentInitializer() throws IOException {
     
     RandomGenerator rnd = Mockito.mock(RandomGenerator.class); // always return 0
     AssignmentInitializer init = new ModelInitialization.BaselineInitializer(rnd, false);
