@@ -388,6 +388,7 @@ public class ConfusedSLDADiscreteModel {
         // assume that all sampling should be done wrt the the current state of the other variables
         // (never ignore metadata supervision)
         state.includeMetadataSupervision = true;
+        state.yMarginals.reset(); // reset marginals ever time we do a new operation
         
         Preconditions.checkNotNull(variableName);
         
@@ -462,6 +463,7 @@ public class ConfusedSLDADiscreteModel {
         if (iteration==0){
           cumulativeNumChanges = 0;
         }
+        state.yMarginals.reset(); // reset marginals ever time we do a new operation
         
         // assume that all maximization should be done wrt the the current state of the other variables
         // (never ignore metadata supervision)
@@ -988,7 +990,6 @@ public class ConfusedSLDADiscreteModel {
     for (int d=0; d<s.numDocuments; d++){
       numChanges += updateYDoc(s, d, null);
     }
-    s.yMarginals.reset();
     return numChanges;
   }
   
