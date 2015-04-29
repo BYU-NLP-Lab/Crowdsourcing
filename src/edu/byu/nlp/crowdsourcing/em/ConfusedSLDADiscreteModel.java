@@ -58,6 +58,7 @@ import edu.byu.nlp.stats.RandomGenerators;
 import edu.byu.nlp.stats.SymmetricDirichletMultinomialDiagonalMatrixMAPOptimizable;
 import edu.byu.nlp.stats.SymmetricDirichletMultinomialMatrixMAPOptimizable;
 import edu.byu.nlp.util.DoubleArrays;
+import edu.byu.nlp.util.IntArrayCounter;
 import edu.byu.nlp.util.IntArrays;
 import edu.byu.nlp.util.Integers;
 import edu.byu.nlp.util.Matrices;
@@ -105,6 +106,7 @@ public class ConfusedSLDADiscreteModel {
     // Variable Assignments
     int[][] z; // inferred topic assignments (one per doc and word position)
     int[] y; // inferred 'true' label assignments (one per doc)
+    IntArrayCounter yMarginals; // track posterior marginal distribution over y
     private MaxEnt maxent; // logistic regression weights b.
     
     // static data-derived values
@@ -145,6 +147,7 @@ public class ConfusedSLDADiscreteModel {
       this.numFeatures=data.getInfo().getNumFeatures();
       this.numTopics=numTopics;
       this.y = new int[numDocuments];
+      this.yMarginals = new IntArrayCounter(numDocuments, numClasses);
       this.z = Datasets.featureVectors2FeatureSequences(data); // this gives us the right dimensions
       Matrices.multiplyAndRoundToSelf(this.z, 0); // initialize values to 0
       // pre-compute static data-derived values
@@ -237,6 +240,7 @@ public class ConfusedSLDADiscreteModel {
       // variable values
       other.maxent = this.maxent; // pass reference (not a deep copy)
       other.y = this.y.clone();
+      other.yMarginals = this.yMarginals.clone();
       other.z = this.z.clone();
       
       // data statistics are derived
@@ -281,6 +285,7 @@ public class ConfusedSLDADiscreteModel {
     private String trainingOps;
     private RandomGenerator rnd;
     private IntermediatePredictionLogger intermediatePredictionLogger;
+    boolean predictSingleLastSample = false;
 
     public ModelBuilder(Dataset dataset){
       this.data=dataset;
@@ -290,6 +295,12 @@ public class ConfusedSLDADiscreteModel {
       this.zInitializer=zInitializer;
       return this;
     }
+    
+    public ModelBuilder setPredictSingleLastSample(boolean predictSingleLastSample){
+      // if false, reports the mode of the marginal posterior for each y) = false; // if false, reports the mode of the marginal posterior for each y
+      this.predictSingleLastSample = predictSingleLastSample;
+      return this;
+    }; 
     
     public ModelBuilder setYInitializer(AssignmentInitializer yInitializer){
       this.yInitializer=yInitializer;
@@ -509,7 +520,7 @@ public class ConfusedSLDADiscreteModel {
         return new DatasetLabeler() {
           @Override
           public Predictions label(Dataset trainingInstances, Dataset heldoutInstances) {
-            return predict(state, trainingInstances, heldoutInstances, rnd);
+            return predict(state, predictSingleLastSample, trainingInstances, heldoutInstances, rnd);
           }
         };
       }
@@ -688,6 +699,10 @@ public class ConfusedSLDADiscreteModel {
   public int[] getY(){
     return this.state.y.clone();
   }
+  
+  public int[] getMarginalY(){
+    return this.state.yMarginals.argmax();
+  }
 
   public int[][] getZ(){
     return Matrices.clone(this.state.z);
@@ -701,22 +716,24 @@ public class ConfusedSLDADiscreteModel {
 
   
 
-  public Predictions predict(Dataset trainingInstances, Dataset heldoutInstances, RandomGenerator rnd){
-    return predict(state, trainingInstances, heldoutInstances, rnd);
+  public Predictions predict(Dataset trainingInstances, boolean predictSingleLastSample, Dataset heldoutInstances, RandomGenerator rnd){
+    return predict(state, predictSingleLastSample, trainingInstances, heldoutInstances, rnd);
   }
 
-  public static Predictions predict(State state, Dataset trainingInstances, Dataset heldoutInstances, RandomGenerator rnd){
+  public static Predictions predict(State state, boolean predictSingleLastSample, Dataset trainingInstances, Dataset heldoutInstances, RandomGenerator rnd){
     // em-derived labels
     List<Prediction> labeledPredictions = Lists.newArrayList();
     List<Prediction> unlabeledPredictions = Lists.newArrayList();
+    // the clause (IntArrays.sum(state.yMarginals.values(0))==0) checks whether yMarginals has been initialized.  
+    // This will be false when model parameters were set most recently via maximization, in which case we want to use raw y values. 
+    int[] inferredYValues = predictSingleLastSample || IntArrays.sum(state.yMarginals.values(0))==0? state.y: state.yMarginals.argmax();
     for (DatasetInstance inst: state.data){
       
       int index = state.instanceIndices.get(inst.getInfo().getSource());
       
-      
       if (inst.getInfo().getNumAnnotations()>0){
         // annotated
-        labeledPredictions.add(new BasicPrediction(state.y[index], inst));
+        labeledPredictions.add(new BasicPrediction(inferredYValues[index], inst));
       }
       else{
         // unannotated - these y's were ignored during inference 
@@ -971,6 +988,7 @@ public class ConfusedSLDADiscreteModel {
     for (int d=0; d<s.numDocuments; d++){
       numChanges += updateYDoc(s, d, null);
     }
+    s.yMarginals.reset();
     return numChanges;
   }
   
@@ -979,6 +997,7 @@ public class ConfusedSLDADiscreteModel {
     for (int d=0; d<s.numDocuments; d++){
       numChanges += updateYDoc(s, d, rnd);
     }
+    s.yMarginals.increment(s.y); // track marginal posterior
     return numChanges;
   }
 

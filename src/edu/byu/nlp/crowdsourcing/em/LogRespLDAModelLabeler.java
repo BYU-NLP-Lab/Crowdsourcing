@@ -33,10 +33,12 @@ public class LogRespLDAModelLabeler implements DatasetLabeler{
 
   private RandomGenerator rnd;
   private LogRespLDAModel model;
+  private boolean predictSingleLastSample;
 
   public LogRespLDAModelLabeler(Dataset data, int numTopics, String trainingOps, MatrixAssignmentInitializer zInitializer, AssignmentInitializer yInitializer, 
-      PriorSpecification priors, IntermediatePredictionLogger predictionLogger, RandomGenerator rnd){
+      PriorSpecification priors, IntermediatePredictionLogger predictionLogger, boolean predictSingleLastSample, RandomGenerator rnd){
     this.rnd=rnd;
+    this.predictSingleLastSample=predictSingleLastSample;
     this.model = new LogRespLDAModel.ModelBuilder(data)
         .setNumTopics(numTopics)
         .setPriors(priors)
@@ -45,13 +47,14 @@ public class LogRespLDAModelLabeler implements DatasetLabeler{
         .setZInitializer(zInitializer)
         .setTrainingOps(trainingOps)
         .setIntermediatePredictionLogger(predictionLogger)
+        .setPredictSingleLastSample(predictSingleLastSample)
         .build();
   }
   
   /** {@inheritDoc} */
   @Override
   public Predictions label(Dataset trainingInstances, Dataset heldoutInstances) {
-    return model.predict(trainingInstances, heldoutInstances, rnd);
+    return model.predict(trainingInstances, predictSingleLastSample, heldoutInstances, rnd);
   }
 
 }

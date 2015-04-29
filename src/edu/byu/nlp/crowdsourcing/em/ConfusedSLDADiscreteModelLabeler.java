@@ -33,10 +33,12 @@ public class ConfusedSLDADiscreteModelLabeler implements DatasetLabeler{
 
   private RandomGenerator rnd;
   private ConfusedSLDADiscreteModel model;
+  private boolean predictSingleLastSample;
 
   public ConfusedSLDADiscreteModelLabeler(Dataset data, int numTopics, String trainingOps, MatrixAssignmentInitializer zInitializer, AssignmentInitializer yInitializer, 
-      PriorSpecification priors, IntermediatePredictionLogger predictionLogger, RandomGenerator rnd){
+      PriorSpecification priors, IntermediatePredictionLogger predictionLogger, boolean predictSingleLastSample, RandomGenerator rnd){
     this.rnd=rnd;
+    this.predictSingleLastSample=predictSingleLastSample;
     this.model = new ConfusedSLDADiscreteModel.ModelBuilder(data)
         .setNumTopics(numTopics)
         .setPriors(priors)
@@ -44,6 +46,7 @@ public class ConfusedSLDADiscreteModelLabeler implements DatasetLabeler{
         .setYInitializer(yInitializer)
         .setZInitializer(zInitializer)
         .setTrainingOps(trainingOps)
+        .setPredictSingleLastSample(predictSingleLastSample)
         .setIntermediatePredictionLogger(predictionLogger)
         .build();
   }
@@ -51,7 +54,7 @@ public class ConfusedSLDADiscreteModelLabeler implements DatasetLabeler{
   /** {@inheritDoc} */
   @Override
   public Predictions label(Dataset trainingInstances, Dataset heldoutInstances) {
-    return model.predict(trainingInstances, heldoutInstances, rnd);
+    return model.predict(trainingInstances, predictSingleLastSample, heldoutInstances, rnd);
   }
 
 }

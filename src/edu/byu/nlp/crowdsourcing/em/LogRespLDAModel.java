@@ -69,8 +69,8 @@ public class LogRespLDAModel {
     return this.state;
   }
 
-  public Predictions predict(Dataset trainingInstances, Dataset heldoutInstances, RandomGenerator rnd){
-    return ConfusedSLDADiscreteModel.predict(state, trainingInstances, heldoutInstances, rnd);
+  public Predictions predict(Dataset trainingInstances, boolean predictSingleLastSample, Dataset heldoutInstances, RandomGenerator rnd){
+    return ConfusedSLDADiscreteModel.predict(state, predictSingleLastSample, trainingInstances, heldoutInstances, rnd);
   }
 
   //////////////////////////////////////////////
@@ -120,6 +120,11 @@ public class LogRespLDAModel {
       this.delegate.setRandomGenerator(rnd);
       return this;
     }
+
+    public ModelBuilder setPredictSingleLastSample(boolean predictSingleLastSample){
+      this.delegate.setPredictSingleLastSample(predictSingleLastSample);
+      return this;
+    } 
     
     public ModelBuilder setIntermediatePredictionLogger(IntermediatePredictionLogger intermediatePredictionLogger){
       this.intermediatePredictionLogger=intermediatePredictionLogger;
@@ -290,7 +295,7 @@ public class LogRespLDAModel {
         return new DatasetLabeler() {
           @Override
           public Predictions label(Dataset trainingInstances, Dataset heldoutInstances) {
-            return ConfusedSLDADiscreteModel.predict(state, trainingInstances, heldoutInstances, rnd);
+            return ConfusedSLDADiscreteModel.predict(state, delegate.predictSingleLastSample, trainingInstances, heldoutInstances, rnd);
           }
         };
       }
