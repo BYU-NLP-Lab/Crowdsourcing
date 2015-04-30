@@ -166,6 +166,9 @@ public class LogRespLDAModel {
         // we do this by turning off includeMetadataSupervision before 
         // updating z and turning it on again after
         state.includeMetadataSupervision = true;
+        if (iteration==0){
+          state.yMarginals.reset(); // reset marginals every time we start a new operation
+        }
         
         Preconditions.checkNotNull(variableName);
         
@@ -240,9 +243,11 @@ public class LogRespLDAModel {
       /** {@inheritDoc} */
       @Override
       public Double maximize(String variableName, int iteration, String[] args) {
-        // reset the cumulative number of changes
+
+        // reset the cumulative number of changes and marginals every time we start a new op
         if (iteration==0){
           cumulativeNumChanges = 0;
+          state.yMarginals.reset(); 
         }
 
         // all
