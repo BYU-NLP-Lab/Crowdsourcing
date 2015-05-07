@@ -29,9 +29,9 @@ import edu.byu.nlp.classify.NaiveBayesClassifier;
 import edu.byu.nlp.classify.NaiveBayesLearner;
 import edu.byu.nlp.crowdsourcing.TrainableMultiAnnModel;
 import edu.byu.nlp.data.docs.CountCutoffFeatureSelectorFactory;
+import edu.byu.nlp.data.docs.DocPipes;
 import edu.byu.nlp.data.docs.DocPipes.Doc2FeaturesMethod;
 import edu.byu.nlp.data.docs.DocumentDatasetBuilder;
-import edu.byu.nlp.data.docs.TokenizerPipes;
 import edu.byu.nlp.data.pipes.EmailHeaderStripper;
 import edu.byu.nlp.data.types.Dataset;
 import edu.byu.nlp.data.types.DatasetInstance;
@@ -174,10 +174,12 @@ public class Baseline {
       throw new IllegalStateException("unknown dataset type: " + datasetType);
     }
 
-    Function<List<String>, List<String>> tokenTransform = null; // FIXME
+    Function<String, String> tokenTransform = null; // FIXME
+    Integer featureNormalizer = null;
     Dataset data =
         new DocumentDatasetBuilder(basedir, dataset, split, docTransform,
-            TokenizerPipes.McCallumAndNigam(), tokenTransform, Doc2FeaturesMethod.WORD_COUNTS, new CountCutoffFeatureSelectorFactory<String>(featureCountCutoff))
+            DocPipes.opennlpSentenceSplitter(), DocPipes.McCallumAndNigamTokenizer(), tokenTransform, 
+            Doc2FeaturesMethod.WORD_COUNTS, new CountCutoffFeatureSelectorFactory<String>(featureCountCutoff), featureNormalizer)
             .dataset();
     data.shuffle(rnd);
 
