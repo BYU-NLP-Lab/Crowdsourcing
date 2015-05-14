@@ -30,7 +30,6 @@ import edu.byu.nlp.classify.NaiveBayesLearner;
 import edu.byu.nlp.crowdsourcing.TrainableMultiAnnModel;
 import edu.byu.nlp.data.docs.CountCutoffFeatureSelectorFactory;
 import edu.byu.nlp.data.docs.DocPipes;
-import edu.byu.nlp.data.docs.DocPipes.Doc2FeaturesMethod;
 import edu.byu.nlp.data.docs.DocumentDatasetBuilder;
 import edu.byu.nlp.data.pipes.EmailHeaderStripper;
 import edu.byu.nlp.data.types.Dataset;
@@ -179,7 +178,7 @@ public class Baseline {
     Dataset data =
         new DocumentDatasetBuilder(basedir, dataset, split, docTransform,
             DocPipes.opennlpSentenceSplitter(), DocPipes.McCallumAndNigamTokenizer(), tokenTransform, 
-            Doc2FeaturesMethod.WORD_COUNTS, new CountCutoffFeatureSelectorFactory<String>(featureCountCutoff), featureNormalizer)
+            new CountCutoffFeatureSelectorFactory<String>(featureCountCutoff), featureNormalizer)
             .dataset();
     data.shuffle(rnd);
 
