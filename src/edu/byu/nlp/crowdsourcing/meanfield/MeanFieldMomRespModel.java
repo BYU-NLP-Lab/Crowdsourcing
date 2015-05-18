@@ -118,6 +118,12 @@ public class MeanFieldMomRespModel extends AbstractMeanFieldMultiAnnModel {
         CrowdsourcingUtils.initializeConfusionMatrixWithPrior(gammaParams[j], priors.getBGamma(j), 1);
       }
       
+      if (Datasets.minFeatureValue(data)<0){
+        logger.warn("detected negative feature weights which momresp is unabel to handle. Scaling to between 0-100.");
+        // ensure dataset features are all positive (negative numbers violate momresp's features:=counts assumption).
+        data = Datasets.scaleFeatureValues(data,0,100);
+      }
+      
       // create model and initialize with empirical counts
       MeanFieldMomRespModel model = new MeanFieldMomRespModel(priors,a,gammaParams,instanceIndices,data,rnd);
       model.empiricalFit();
