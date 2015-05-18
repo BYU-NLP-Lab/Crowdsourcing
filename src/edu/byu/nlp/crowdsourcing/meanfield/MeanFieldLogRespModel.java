@@ -186,25 +186,12 @@ public class MeanFieldLogRespModel extends AbstractMeanFieldMultiAnnModel {
     
     // optimize hypers
     if (priors.getInlineHyperparamTuning()){
-      fitBPhi();
+      // TODO: we might fit regression parameters mu and sigma^2
       fitBGamma();
     }
   }
   
 
-  private void fitBPhi() {
-    logger.info("optimizing bphi in light of most recent posterior assignments");
-    double oldValue = priors.getBPhi();
-    IterativeOptimizer optimizer = new IterativeOptimizer(ConvergenceCheckers.relativePercentChange(PriorSpecification.HYPERPARAM_LEARNING_CONVERGENCE_THRESHOLD));
-    // TODO: here we are tying ALL bphi hyperparams (even across classes). In this case, inference actually doesn't matter
-    // Alternatively, we could fit each class symmetric dirichlet separately. Or even fit each individual parameter (maybe w/ gamma prior).
-    double[][] perClassVocabCounts = perClassVocab(data, instances, vars.logg);
-    SymmetricDirichletMultinomialMatrixMAPOptimizable o = SymmetricDirichletMultinomialMatrixMAPOptimizable.newOptimizable(perClassVocabCounts,2,2);
-    ValueAndObject<Double> optimum = optimizer.optimize(o, ReturnType.HIGHEST, true, oldValue);
-    double newValue = optimum.getObject();
-    priors.setBPhi(newValue);
-    logger.info("new bphi="+newValue+" old bphi="+oldValue);
-  }
   private double[][][] annotatorConfusions;
   private void fitBGamma() {
 	if (annotatorConfusions==null){
