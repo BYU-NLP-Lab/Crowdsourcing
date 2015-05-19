@@ -92,6 +92,7 @@ public class ConfusedSLDADiscreteModel {
     
     // flags
     boolean includeMetadataSupervision = false; // if false, reduces to unsupervised LDA
+    boolean includeLexicalFeatures = false; // if true, includes lexical features in logistic regression
     
     // data
     Dataset data;
@@ -131,16 +132,20 @@ public class ConfusedSLDADiscreteModel {
 
     // buffers (instantiated just once for a small efficiency gain)
     private final double[] zCoeffs; // stores topic probabilities while sampling a z
-    private final double[] logisticClassScores; // stores class probabilities while sampling a z 
+    private final double[] logisticClassScores; // stores class probabilities while sampling a y 
     private double[] cachedMetadataScores; // stores topic scores for a document d while sampling the words in that doc 
     private final double[] yCoeffs; // stores class probabilities while sampling a y
     private Map<String, Integer> instanceIndices;
 
 
-    
+
     public State(Dataset data, PriorSpecification priors, int numTopics){
+      this(data,priors,numTopics,false);
+    }
+    public State(Dataset data, PriorSpecification priors, int numTopics, boolean lexicalFeatures){
       this.data=data;
       this.priors=priors;
+      this.includeLexicalFeatures=lexicalFeatures;
       this.numClasses=data.getInfo().getNumClasses();
       this.numDocuments=data.getInfo().getNumDocuments();
       this.numAnnotators=data.getInfo().getNumAnnotators();
@@ -286,6 +291,7 @@ public class ConfusedSLDADiscreteModel {
     private RandomGenerator rnd;
     private IntermediatePredictionLogger intermediatePredictionLogger;
     boolean predictSingleLastSample = false;
+    boolean lexicalFeatures = false;
 
     public ModelBuilder(Dataset dataset){
       this.data=dataset;
@@ -295,10 +301,20 @@ public class ConfusedSLDADiscreteModel {
       this.zInitializer=zInitializer;
       return this;
     }
-    
+
+    /**
+     * if false, reports the mode of the marginal posterior for each y) = false; // if false, reports the mode of the marginal posterior for each y
+     */
     public ModelBuilder setPredictSingleLastSample(boolean predictSingleLastSample){
-      // if false, reports the mode of the marginal posterior for each y) = false; // if false, reports the mode of the marginal posterior for each y
       this.predictSingleLastSample = predictSingleLastSample;
+      return this;
+    }; 
+
+    /**
+     * if true, do logistic regression on both topical and lexical features
+     */
+    public ModelBuilder setLexicalFeatures(boolean lexicalFeatures){ 
+      this.lexicalFeatures = lexicalFeatures;
       return this;
     }; 
     
@@ -340,7 +356,7 @@ public class ConfusedSLDADiscreteModel {
       ////////////////////
       // create model 
       ////////////////////
-      State state = new State(data, priors, numTopics);
+      State state = new State(data, priors, numTopics, lexicalFeatures);
       
       // initialize state
       yInitializer.setData(data, state.instanceIndices);
