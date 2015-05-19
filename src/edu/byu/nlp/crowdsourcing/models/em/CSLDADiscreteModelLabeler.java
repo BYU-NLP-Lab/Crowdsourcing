@@ -29,25 +29,26 @@ import edu.byu.nlp.data.types.Dataset;
  * @author pfelt
  *
  */
-public class LogRespLDAModelLabeler implements DatasetLabeler{
+public class CSLDADiscreteModelLabeler implements DatasetLabeler{
 
   private RandomGenerator rnd;
-  private LogRespLDAModel model;
+  private CSLDADiscreteModel model;
   private boolean predictSingleLastSample;
 
-  public LogRespLDAModelLabeler(Dataset data, int numTopics, String trainingOps, MatrixAssignmentInitializer zInitializer, AssignmentInitializer yInitializer, 
-      PriorSpecification priors, IntermediatePredictionLogger predictionLogger, boolean predictSingleLastSample, RandomGenerator rnd){
+  public CSLDADiscreteModelLabeler(Dataset data, int numTopics, String trainingOps, MatrixAssignmentInitializer zInitializer, AssignmentInitializer yInitializer, 
+      PriorSpecification priors, IntermediatePredictionLogger predictionLogger, boolean predictSingleLastSample, boolean lexicalFeatures, RandomGenerator rnd){
     this.rnd=rnd;
     this.predictSingleLastSample=predictSingleLastSample;
-    this.model = new LogRespLDAModel.ModelBuilder(data)
+    this.model = new CSLDADiscreteModel.ModelBuilder(data)
         .setNumTopics(numTopics)
         .setPriors(priors)
         .setRandomGenerator(rnd)
         .setYInitializer(yInitializer)
         .setZInitializer(zInitializer)
         .setTrainingOps(trainingOps)
-        .setIntermediatePredictionLogger(predictionLogger)
         .setPredictSingleLastSample(predictSingleLastSample)
+        .setLexicalFeatures(lexicalFeatures)
+        .setIntermediatePredictionLogger(predictionLogger)
         .build();
   }
   

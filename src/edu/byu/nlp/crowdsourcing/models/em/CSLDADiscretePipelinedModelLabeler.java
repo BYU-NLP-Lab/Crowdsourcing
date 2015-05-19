@@ -29,26 +29,25 @@ import edu.byu.nlp.data.types.Dataset;
  * @author pfelt
  *
  */
-public class ConfusedSLDADiscreteModelLabeler implements DatasetLabeler{
+public class CSLDADiscretePipelinedModelLabeler implements DatasetLabeler{
 
   private RandomGenerator rnd;
-  private ConfusedSLDADiscreteModel model;
+  private CSLDADiscretePipelinedModel model;
   private boolean predictSingleLastSample;
 
-  public ConfusedSLDADiscreteModelLabeler(Dataset data, int numTopics, String trainingOps, MatrixAssignmentInitializer zInitializer, AssignmentInitializer yInitializer, 
-      PriorSpecification priors, IntermediatePredictionLogger predictionLogger, boolean predictSingleLastSample, boolean lexicalFeatures, RandomGenerator rnd){
+  public CSLDADiscretePipelinedModelLabeler(Dataset data, int numTopics, String trainingOps, MatrixAssignmentInitializer zInitializer, AssignmentInitializer yInitializer, 
+      PriorSpecification priors, IntermediatePredictionLogger predictionLogger, boolean predictSingleLastSample, RandomGenerator rnd){
     this.rnd=rnd;
     this.predictSingleLastSample=predictSingleLastSample;
-    this.model = new ConfusedSLDADiscreteModel.ModelBuilder(data)
+    this.model = new CSLDADiscretePipelinedModel.ModelBuilder(data)
         .setNumTopics(numTopics)
         .setPriors(priors)
         .setRandomGenerator(rnd)
         .setYInitializer(yInitializer)
         .setZInitializer(zInitializer)
         .setTrainingOps(trainingOps)
-        .setPredictSingleLastSample(predictSingleLastSample)
-        .setLexicalFeatures(lexicalFeatures)
         .setIntermediatePredictionLogger(predictionLogger)
+        .setPredictSingleLastSample(predictSingleLastSample)
         .build();
   }
   

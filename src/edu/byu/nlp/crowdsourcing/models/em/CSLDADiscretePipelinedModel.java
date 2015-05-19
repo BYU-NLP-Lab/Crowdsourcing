@@ -29,7 +29,7 @@ import edu.byu.nlp.classify.util.ModelTraining.SupportsTrainingOperations;
 import edu.byu.nlp.crowdsourcing.ModelInitialization.AssignmentInitializer;
 import edu.byu.nlp.crowdsourcing.ModelInitialization.MatrixAssignmentInitializer;
 import edu.byu.nlp.crowdsourcing.PriorSpecification;
-import edu.byu.nlp.crowdsourcing.models.em.ConfusedSLDADiscreteModel.State;
+import edu.byu.nlp.crowdsourcing.models.em.CSLDADiscreteModel.State;
 import edu.byu.nlp.data.types.Dataset;
 import edu.byu.nlp.util.Matrices;
 
@@ -40,8 +40,8 @@ import edu.byu.nlp.util.Matrices;
  * which LogResp is run using topic features for data. This can be 
  * implemented as a special case of the csLDA model. 
  */
-public class LogRespLDAModel {
-  private static final Logger logger = LoggerFactory.getLogger(LogRespLDAModel.class);
+public class CSLDADiscretePipelinedModel {
+  private static final Logger logger = LoggerFactory.getLogger(CSLDADiscretePipelinedModel.class);
   
   
   //////////////////////////////////////////////
@@ -49,7 +49,7 @@ public class LogRespLDAModel {
   //////////////////////////////////////////////
   private State state;
   
-  public LogRespLDAModel(State state) {
+  public CSLDADiscretePipelinedModel(State state) {
     this.state=state;
   }
 
@@ -70,7 +70,7 @@ public class LogRespLDAModel {
   }
 
   public Predictions predict(Dataset trainingInstances, boolean predictSingleLastSample, Dataset heldoutInstances, RandomGenerator rnd){
-    return ConfusedSLDADiscreteModel.predict(state, predictSingleLastSample, trainingInstances, heldoutInstances, rnd);
+    return CSLDADiscreteModel.predict(state, predictSingleLastSample, trainingInstances, heldoutInstances, rnd);
   }
 
   //////////////////////////////////////////////
@@ -78,7 +78,7 @@ public class LogRespLDAModel {
   //////////////////////////////////////////////
   public static class ModelBuilder {
     
-    ConfusedSLDADiscreteModel.ModelBuilder delegate;
+    CSLDADiscreteModel.ModelBuilder delegate;
     
     private String trainingOps;
     private RandomGenerator rnd;
@@ -86,7 +86,7 @@ public class LogRespLDAModel {
     private IntermediatePredictionLogger intermediatePredictionLogger;
 
     public ModelBuilder(Dataset dataset){
-      this.delegate = new ConfusedSLDADiscreteModel.ModelBuilder(dataset);
+      this.delegate = new CSLDADiscreteModel.ModelBuilder(dataset);
     }
 
     public ModelBuilder setZInitializer(MatrixAssignmentInitializer zInitializer){
@@ -131,12 +131,12 @@ public class LogRespLDAModel {
       return this;
     }
     
-    protected LogRespLDAModel build() {
+    protected CSLDADiscretePipelinedModel build() {
 
-      ConfusedSLDADiscreteModel delegateModel = this.delegate.build(false);
+      CSLDADiscreteModel delegateModel = this.delegate.build(false);
       State state = delegateModel.getState();
 
-      LogRespLDAModel model = new LogRespLDAModel(state);
+      CSLDADiscretePipelinedModel model = new CSLDADiscretePipelinedModel(state);
       
       ////////////////////
       // train model 
@@ -144,9 +144,9 @@ public class LogRespLDAModel {
       ModelTrainer trainer = new ModelTrainer(state);
       ModelTraining.doOperations(trainingOps, trainer, intermediatePredictionLogger);
 
-      logger.info("Training finished with log joint="+ConfusedSLDADiscreteModel.unnormalizedLogJoint(state));
+      logger.info("Training finished with log joint="+CSLDADiscreteModel.unnormalizedLogJoint(state));
       logger.info("Final topics");
-      ConfusedSLDADiscreteModel.logTopNWordsPerTopic(state, 10);
+      CSLDADiscreteModel.logTopNWordsPerTopic(state, 10);
       
       return model;
       
@@ -175,52 +175,52 @@ public class LogRespLDAModel {
         // Joint
         if (variableName.equals("all")){
           logger.debug("maximizing log-linear weights B iteration "+iteration);
-          ConfusedSLDADiscreteModel.maximizeB(state); 
+          CSLDADiscreteModel.maximizeB(state); 
           logger.debug("sampling class label vector Y iteration "+iteration);
-          ConfusedSLDADiscreteModel.sampleY(state, rnd);
+          CSLDADiscreteModel.sampleY(state, rnd);
           logger.debug("sampling topic matrix Z iteration "+iteration);
           state.includeMetadataSupervision = false;
-          ConfusedSLDADiscreteModel.sampleZ(state, rnd);
+          CSLDADiscreteModel.sampleZ(state, rnd);
           state.includeMetadataSupervision = true;
           // periodically tune hypers and report joint
-          if (iteration%ConfusedSLDADiscreteModel.HYPERPARAM_TUNING_PERIOD==0){
-            logger.info("sample Y+Z+B iteration "+iteration+" with (unnormalized) log joint "+ConfusedSLDADiscreteModel.unnormalizedLogJoint(state));
+          if (iteration%CSLDADiscreteModel.HYPERPARAM_TUNING_PERIOD==0){
+            logger.info("sample Y+Z+B iteration "+iteration+" with (unnormalized) log joint "+CSLDADiscreteModel.unnormalizedLogJoint(state));
             if (state.priors.getInlineHyperparamTuning()){
-              ConfusedSLDADiscreteModel.updateBTheta(state);
-              ConfusedSLDADiscreteModel.updateBPhi(state);
-              ConfusedSLDADiscreteModel.updateBGamma(state);
+              CSLDADiscreteModel.updateBTheta(state);
+              CSLDADiscreteModel.updateBPhi(state);
+              CSLDADiscreteModel.updateBGamma(state);
             }
           }
         }
         // Y
         else if (variableName.toLowerCase().equals("y")){
           state.includeMetadataSupervision = true;
-          ConfusedSLDADiscreteModel.sampleY(state, rnd);
+          CSLDADiscreteModel.sampleY(state, rnd);
           logger.debug("sample Y+B iteration "+iteration);
           // periodically tune hypers and report joint
-          if (iteration%ConfusedSLDADiscreteModel.HYPERPARAM_TUNING_PERIOD==0){
+          if (iteration%CSLDADiscreteModel.HYPERPARAM_TUNING_PERIOD==0){
             logger.info("maximizing log-linear weights B iteration "+iteration);
-            ConfusedSLDADiscreteModel.maximizeB(state); 
-            logger.info("sample Y+B iteration "+iteration+" with (unnormalized) log joint "+ConfusedSLDADiscreteModel.unnormalizedLogJoint(state));
+            CSLDADiscreteModel.maximizeB(state); 
+            logger.info("sample Y+B iteration "+iteration+" with (unnormalized) log joint "+CSLDADiscreteModel.unnormalizedLogJoint(state));
             if (state.priors.getInlineHyperparamTuning()){
-              ConfusedSLDADiscreteModel.updateBGamma(state);
+              CSLDADiscreteModel.updateBGamma(state);
             }
           }
         }
         // Z
         else if (variableName.toLowerCase().equals("z")){
           state.includeMetadataSupervision = false;
-          ConfusedSLDADiscreteModel.sampleZ(state, rnd);
+          CSLDADiscreteModel.sampleZ(state, rnd);
           state.includeMetadataSupervision = true;
           logger.debug("sample Z+B iteration "+iteration);
           // periodically tune hypers and report joint
-          if (iteration%ConfusedSLDADiscreteModel.HYPERPARAM_TUNING_PERIOD==0){
+          if (iteration%CSLDADiscreteModel.HYPERPARAM_TUNING_PERIOD==0){
             logger.info("maximizing log-linear weights B iteration "+iteration);
-            ConfusedSLDADiscreteModel.maximizeB(state); 
-            logger.info("sample Z+B iteration "+iteration+" with (unnormalized) log joint "+ConfusedSLDADiscreteModel.unnormalizedLogJoint(state));
+            CSLDADiscreteModel.maximizeB(state); 
+            logger.info("sample Z+B iteration "+iteration+" with (unnormalized) log joint "+CSLDADiscreteModel.unnormalizedLogJoint(state));
             if (state.priors.getInlineHyperparamTuning()){
-              ConfusedSLDADiscreteModel.updateBTheta(state);
-              ConfusedSLDADiscreteModel.updateBPhi(state);
+              CSLDADiscreteModel.updateBTheta(state);
+              CSLDADiscreteModel.updateBPhi(state);
             }
           }
         }
@@ -233,8 +233,8 @@ public class LogRespLDAModel {
         }
 
         // for efficiency, only calculate objective value periodically
-        if (iteration%ConfusedSLDADiscreteModel.HYPERPARAM_TUNING_PERIOD==0){
-          return ConfusedSLDADiscreteModel.unnormalizedLogJoint(state);
+        if (iteration%CSLDADiscreteModel.HYPERPARAM_TUNING_PERIOD==0){
+          return CSLDADiscreteModel.unnormalizedLogJoint(state);
         }
         return null;
       }
@@ -256,39 +256,39 @@ public class LogRespLDAModel {
           
           // maximize topics (vanilla LDA)
           logger.debug("maximizing log-linear model parameters b iteration "+iteration);
-          ConfusedSLDADiscreteModel.maximizeB(state); // set maxent model weights
+          CSLDADiscreteModel.maximizeB(state); // set maxent model weights
           logger.debug("maximizing topic assignments Z iteration "+iteration);
           state.includeMetadataSupervision = false;
-          cumulativeNumChanges += ConfusedSLDADiscreteModel.maximizeZ(state); // set topic assignments
+          cumulativeNumChanges += CSLDADiscreteModel.maximizeZ(state); // set topic assignments
           state.includeMetadataSupervision = true;
           logger.debug("maximizing inferred labels Y iteration "+iteration);
-          cumulativeNumChanges += ConfusedSLDADiscreteModel.maximizeY(state); // set inferred label values
+          cumulativeNumChanges += CSLDADiscreteModel.maximizeY(state); // set inferred label values
           // tune hyperparams
-          ConfusedSLDADiscreteModel.updateBTheta(state);
-          ConfusedSLDADiscreteModel.updateBPhi(state);
-          ConfusedSLDADiscreteModel.updateBGamma(state);
+          CSLDADiscreteModel.updateBTheta(state);
+          CSLDADiscreteModel.updateBPhi(state);
+          CSLDADiscreteModel.updateBGamma(state);
         }
         // Y
         else if (variableName.toLowerCase().equals("y")){ 
           state.includeMetadataSupervision = true;
           logger.debug("maximizing inferred labels Y iteration "+iteration);
-          cumulativeNumChanges += ConfusedSLDADiscreteModel.maximizeY(state); // set inferred label values
+          cumulativeNumChanges += CSLDADiscreteModel.maximizeY(state); // set inferred label values
           // update hyperparam
-          ConfusedSLDADiscreteModel.updateBGamma(state);
+          CSLDADiscreteModel.updateBGamma(state);
         }
         // Z
         else if (variableName.toLowerCase().equals("z")){
           state.includeMetadataSupervision = false;
           logger.debug("maximizing topic assignments Z iteration "+iteration);
-          cumulativeNumChanges += ConfusedSLDADiscreteModel.maximizeZ(state); // set topic assignments
+          cumulativeNumChanges += CSLDADiscreteModel.maximizeZ(state); // set topic assignments
           // tune hyperparams
-          ConfusedSLDADiscreteModel.updateBTheta(state);
-          ConfusedSLDADiscreteModel.updateBPhi(state);
+          CSLDADiscreteModel.updateBTheta(state);
+          CSLDADiscreteModel.updateBPhi(state);
         }
         // B
         else if (variableName.toLowerCase().equals("b")){
           logger.debug("maximizing regression vector B iteration "+iteration);
-          ConfusedSLDADiscreteModel.maximizeB(state);
+          CSLDADiscreteModel.maximizeB(state);
         }
         else{
           throw new IllegalArgumentException("unknown variable name "+variableName);
@@ -300,7 +300,7 @@ public class LogRespLDAModel {
         return new DatasetLabeler() {
           @Override
           public Predictions label(Dataset trainingInstances, Dataset heldoutInstances) {
-            return ConfusedSLDADiscreteModel.predict(state, delegate.predictSingleLastSample, trainingInstances, heldoutInstances, rnd);
+            return CSLDADiscreteModel.predict(state, delegate.predictSingleLastSample, trainingInstances, heldoutInstances, rnd);
           }
         };
       }

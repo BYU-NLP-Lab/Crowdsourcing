@@ -75,8 +75,8 @@ import edu.byu.nlp.util.Pair;
  * For more info on this model, see notes in 
  * https://drive.google.com/drive/u/0/#folders/0B5phubFg2ZvVSDRvS0U1S3pScjQ/0B5phubFg2ZvVNWtfMEN1b0NMWlk
  */
-public class ConfusedSLDADiscreteModel {
-  private static final Logger logger = LoggerFactory.getLogger(ConfusedSLDADiscreteModel.class);
+public class CSLDADiscreteModel {
+  private static final Logger logger = LoggerFactory.getLogger(CSLDADiscreteModel.class);
   public static final int DEFAULT_TRAINING_ITERATIONS = 25;
   public static final int HYPERPARAM_TUNING_PERIOD = 25;
   
@@ -354,11 +354,11 @@ public class ConfusedSLDADiscreteModel {
       return this;
     }
 
-    protected ConfusedSLDADiscreteModel build() {
+    protected CSLDADiscreteModel build() {
       return build(true);
     }
     
-    protected ConfusedSLDADiscreteModel build(boolean doTraining) {
+    protected CSLDADiscreteModel build(boolean doTraining) {
       ////////////////////
       // create model 
       ////////////////////
@@ -380,7 +380,7 @@ public class ConfusedSLDADiscreteModel {
       addPriorsToCounts(state);
       
       // create model 
-      ConfusedSLDADiscreteModel model = new ConfusedSLDADiscreteModel(state);
+      CSLDADiscreteModel model = new CSLDADiscreteModel(state);
       maximizeB(state); // ensure that log-linear weights exist
 
       if (doTraining){
@@ -782,7 +782,7 @@ public class ConfusedSLDADiscreteModel {
   //////////////////////////////////////////////
   private State state;
   
-  public ConfusedSLDADiscreteModel(State state) {
+  public CSLDADiscreteModel(State state) {
     this.state=state;
   }
 
