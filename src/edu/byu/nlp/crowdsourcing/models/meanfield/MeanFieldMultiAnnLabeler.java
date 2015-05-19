@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package edu.byu.nlp.crowdsourcing.meanfield;
+package edu.byu.nlp.crowdsourcing.models.meanfield;
 
 import java.util.List;
 

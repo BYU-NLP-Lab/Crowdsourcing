@@ -11,16 +11,21 @@
  * or implied. See the License for the specific language governing permissions and limitations under
  * the License.
  */
-package edu.byu.nlp.crowdsourcing.meanfield;
+package edu.byu.nlp.crowdsourcing.models.meanfield;
 
+import java.util.ArrayList;
 import java.util.Map;
 
 import org.apache.commons.math3.random.RandomGenerator;
-import org.apache.commons.math3.special.Gamma;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import cc.mallet.classify.MaxEnt;
 import cc.mallet.types.Dirichlet;
+
+import com.google.common.collect.Lists;
+
+import edu.byu.nlp.classify.MalletMaxentTrainer;
 import edu.byu.nlp.classify.data.DatasetLabeler;
 import edu.byu.nlp.classify.eval.Predictions;
 import edu.byu.nlp.crowdsourcing.CrowdsourcingUtils;
@@ -30,8 +35,8 @@ import edu.byu.nlp.crowdsourcing.MultiAnnState;
 import edu.byu.nlp.crowdsourcing.PriorSpecification;
 import edu.byu.nlp.data.types.Dataset;
 import edu.byu.nlp.data.types.DatasetInstance;
+import edu.byu.nlp.data.types.SparseFeatureVector.EntryVisitor;
 import edu.byu.nlp.dataset.Datasets;
-import edu.byu.nlp.math.GammaFunctions;
 import edu.byu.nlp.math.optimize.ConvergenceCheckers;
 import edu.byu.nlp.math.optimize.IterativeOptimizer;
 import edu.byu.nlp.math.optimize.IterativeOptimizer.ReturnType;
@@ -40,7 +45,6 @@ import edu.byu.nlp.stats.SymmetricDirichletMultinomialDiagonalMatrixMAPOptimizab
 import edu.byu.nlp.stats.SymmetricDirichletMultinomialMatrixMAPOptimizable;
 import edu.byu.nlp.util.DoubleArrays;
 import edu.byu.nlp.util.IntArrayCounter;
-import edu.byu.nlp.util.IntArrays;
 import edu.byu.nlp.util.Matrices;
 import edu.byu.nlp.util.MatrixAverager;
 import edu.byu.nlp.util.Pair;
@@ -48,43 +52,44 @@ import edu.byu.nlp.util.Pair;
 /**
  * @author pfelt
  */
-public class MeanFieldItemRespModel extends AbstractMeanFieldMultiAnnModel {
+public class MeanFieldLogRespModel extends AbstractMeanFieldMultiAnnModel {
 
-  private static final Logger logger = LoggerFactory.getLogger(MeanFieldItemRespModel.class);
+  private static final Logger logger = LoggerFactory.getLogger(MeanFieldLogRespModel.class);
 
   private static double INITIALIZATION_SMOOTHING = 1e-6; 
   
 //  private static double LOG_CATEGORICAL_SMOOTHING = Math.log(1e-100);
   
   PriorSpecification priors;
-  double[][] muParams;
   double[][][] gammaParams;
   
   private Dataset data;
+  private ArrayList<DatasetInstance> instances;
   private int[][][] a; // annotations dim=NxJxK
+  double[] docSizes;
   private Map<String, Integer> instanceIndices;
   private RandomGenerator rnd;
   public VariationalParams vars, newvars;
-  
+  private MalletMaxentTrainer trainer;
+
   // cached values
-  private double[] digammaOfPis;
   private double[][][] digammaOfNus;
-  private double digammaOfSummedPis;
   private double[][] digammaOfSummedNus;
+  private double[][] maxLambda;
+
   
   static class VariationalParams{
     double[][] logg; // g(y) dim=NxK
-    double[] pi;  // pi(theta) dim=J
     double[][][] nu; // nu(gamma) dim=JxKxK
-    public VariationalParams(int numClasses, int numAnnotators, int numInstances){
+    private MaxEnt maxent;
+    public VariationalParams(int numClasses, int numAnnotators, int numInstances, int numFeatures){
       this.logg = new double[numInstances][numClasses];
-      this.pi = new double[numClasses];
       this.nu = new double[numAnnotators][numClasses][numClasses];
     }
     public void clonetoSelf(VariationalParams other){
       this.logg = Matrices.clone(other.logg);
-      this.pi = other.pi.clone();
       this.nu = Matrices.clone(other.nu);
+      this.maxent = other.maxent; // TODO need to clone?
     }
   }
   
@@ -101,15 +106,14 @@ public class MeanFieldItemRespModel extends AbstractMeanFieldMultiAnnModel {
         RandomGenerator rnd) {
       
       // priors
-      double[][] muParams = new double[logCountOfY.length][logCountOfY.length];
-      CrowdsourcingUtils.initializeConfusionMatrixWithPrior(muParams, priors.getBMu(), priors.getCMu());
       double[][][] gammaParams = new double[countOfJYAndA.length][logCountOfY.length][logCountOfY.length];
       for (int j=0; j<countOfJYAndA.length; j++){
         CrowdsourcingUtils.initializeConfusionMatrixWithPrior(gammaParams[j], priors.getBGamma(j), 1);
       }
       
       // create model and initialize with empirical counts
-      MeanFieldItemRespModel model = new MeanFieldItemRespModel(priors,a,muParams,gammaParams,instanceIndices,data,rnd);
+      MalletMaxentTrainer trainer = MalletMaxentTrainer.build(data);
+      MeanFieldLogRespModel model = new MeanFieldLogRespModel(trainer, priors,a,gammaParams,instanceIndices,data,rnd);
       model.empiricalFit();
       
       return model;
@@ -118,17 +122,19 @@ public class MeanFieldItemRespModel extends AbstractMeanFieldMultiAnnModel {
   }
 
   
-  public MeanFieldItemRespModel(PriorSpecification priors, int[][][] a,  
-      double[][] muParams, double[][][] gammaParams, Map<String,Integer> instanceIndices, Dataset data, RandomGenerator rnd) {
+  public MeanFieldLogRespModel(MalletMaxentTrainer trainer, PriorSpecification priors, int[][][] a,  
+      double[][][] gammaParams, Map<String,Integer> instanceIndices, Dataset data, RandomGenerator rnd) {
+    this.trainer=trainer;
     this.priors=priors;
     this.a=a;
     this.data=data;
-    this.muParams=muParams;
+    this.docSizes = Datasets.countDocSizes(data);
+    this.instances = Lists.newArrayList(data);
     this.gammaParams=gammaParams;
     this.instanceIndices=instanceIndices;
     this.rnd=rnd;
-    this.vars = new VariationalParams(muParams.length,gammaParams.length,a.length);
-    this.newvars = new VariationalParams(muParams.length,gammaParams.length,a.length);
+    this.vars = new VariationalParams(gammaParams[0].length,gammaParams.length,a.length,data.getInfo().getNumFeatures());
+    this.newvars = new VariationalParams(gammaParams[0].length,gammaParams.length,a.length,data.getInfo().getNumFeatures());
   }
 
   
@@ -143,10 +149,9 @@ public class MeanFieldItemRespModel extends AbstractMeanFieldMultiAnnModel {
       }
       DoubleArrays.normalizeAndLogToSelf(vars.logg[i]);
     }
-    
     // init params based on g and h
-    fitPi(vars.pi);
     fitNu(vars.nu);
+    vars.maxent = trainer.maxDataModel(Matrices.exp(vars.logg), vars.maxent);
     
     // make sure both sets of parameter values match
     newvars.clonetoSelf(vars);
@@ -155,38 +160,37 @@ public class MeanFieldItemRespModel extends AbstractMeanFieldMultiAnnModel {
   /** {@inheritDoc} */
   @Override
   public MultiAnnState getCurrentState() {
-
+    
     return new MeanFieldMultiAnnState(
         Matrices.exp(vars.logg), 
-        Matrices.exp(vars.logg), // h 
-        vars.pi, 
+        Matrices.exp(vars.logg), // h  
+        null, // pi
         vars.nu, 
         Matrices.of(1, numClasses(), numClasses()), // tau 
-        Matrices.of(1, numClasses(), numFeatures()), // lambda
+        null, // lambda
+        vars.maxent,
         data, instanceIndices);
-    
   }
-
-
 
   /** {@inheritDoc} */
   @Override
   public void maximize() {
     fitG(newvars.logg);
-    fitPi(newvars.pi);
     fitNu(newvars.nu);
+    newvars.maxent = trainer.maxDataModel(Matrices.exp(vars.logg), vars.maxent);
     
     // swap in new values
     VariationalParams tmpvars = this.vars;
     this.vars = this.newvars;
     this.newvars = tmpvars;
     
-    // optimize hyperparams
+    // optimize hypers
     if (priors.getInlineHyperparamTuning()){
-      fitBTheta();
+      // TODO: we might fit regression parameters mu and sigma^2
       fitBGamma();
     }
   }
+  
 
   private double[][][] annotatorConfusions;
   private void fitBGamma() {
@@ -216,27 +220,6 @@ public class MeanFieldItemRespModel extends AbstractMeanFieldMultiAnnModel {
     logger.info("new bgamma="+optimum.getObject()+" old bgamma="+oldValue);
   }
 
-  private void fitBTheta() {
-    logger.info("optimizing btheta in light of most recent posterior assignments");
-    double oldValue = priors.getBTheta();
-    IterativeOptimizer optimizer = new IterativeOptimizer(ConvergenceCheckers.relativePercentChange(PriorSpecification.HYPERPARAM_LEARNING_CONVERGENCE_THRESHOLD));
-    double perDocumentClassCounts[][] = Matrices.exp(vars.logg);
-    SymmetricDirichletMultinomialMatrixMAPOptimizable o = SymmetricDirichletMultinomialMatrixMAPOptimizable.newOptimizable(perDocumentClassCounts,2,2);
-    ValueAndObject<Double> optimum = optimizer.optimize(o, ReturnType.HIGHEST, true, oldValue);
-    double newValue = optimum.getObject();
-    priors.setBTheta(newValue);
-    logger.info("new btheta="+newValue+" old btheta="+oldValue);
-  }
-  
-  public void fitPi(double[] pi) {
-    double[][] g = Matrices.exp(vars.logg);
-    
-    double[] summedClasses = Matrices.sumOverFirst(g);
-    DoubleArrays.addToSelf(summedClasses, priors.getBTheta());
-    for (int k=0; k<pi.length; k++){
-      pi[k] = summedClasses[k];
-    }
-  }
   public void fitNu(double[][][] nu) {
     double[][] g = Matrices.exp(vars.logg);
     
@@ -258,179 +241,97 @@ public class MeanFieldItemRespModel extends AbstractMeanFieldMultiAnnModel {
   public void fitG(double[][] logg) {
     
     // precalculate 
-    double[] digammaOfPis = MeanFieldMultiRespModel.digammasOfArray(vars.pi);
-    double digammaOfSummedPis = MeanFieldMultiRespModel.digammaOfSummedArray(vars.pi);
     double[][][] digammaOfNus = MeanFieldMultiRespModel.digammasOfTensor(vars.nu);
     double[][] digammaOfSummedNus = MeanFieldMultiRespModel.digammasOfArraysSummedOverLast(vars.nu);
+    double[][] maxLambda = trainer.maxWeights(vars.maxent, numClasses(), numFeatures());
     
     for (int i=0; i<numInstances(); i++){
-      fitG_i(logg[i],a[i],digammaOfPis,digammaOfSummedPis,digammaOfNus,digammaOfSummedNus);
+      fitG_i(logg[i],a[i],instances.get(i),digammaOfNus,digammaOfSummedNus,maxLambda);
     }
   }
-  public void fitG_i(double[] logg_i, int[][] a_i, double[] digammaOfPis, double digammaOfSummedPis, 
-      double[][][] digammaOfNus, double[][] digammaOfSummedNus) {
+  public void fitG_i(double[] logg_i, int[][] a_i, DatasetInstance instance, 
+      double[][][] digammaOfNus, double[][] digammaOfSummedNus, final double[][] maxLambda) {
     for (int k=0; k<numClasses(); k++){
       
       double term1 = 0;
-      term1 += digammaOfPis[k] - digammaOfSummedPis;
-      
-      double term2 = 0;
       for (int j=0; j<numAnnotators(); j++){
         for (int k2=0; k2<numClasses(); k2++){
-          term2 += a_i[j][k2] * (digammaOfNus[j][k][k2] - digammaOfSummedNus[j][k]);
+          term1 += a_i[j][k2] * (digammaOfNus[j][k][k2] - digammaOfSummedNus[j][k]);
         }
       }
+
+      final double[] term2 = new double[]{0}; // this is only an array so it can be final AND mutable
+      final int kk = k;
+      term2[0] += maxLambda[kk][numFeatures()]; // class bias term
+      instance.asFeatureVector().visitSparseEntries(new EntryVisitor() {
+        @Override
+        public void visitEntry(int f, double x_if) {
+          double phi1 = x_if;
+          double phi2 = maxLambda[kk][f];
+          term2[0] += phi1 * phi2;
+//          System.out.println("x_i"+f+"("+phi1+")"+" w_"+kk+f+"("+phi2+")");
+        }
+      });
       
-      logg_i[k] = term1 + term2; 
+      logg_i[k] = term1 + term2[0]; 
     }
+//    // FIXME: DEBUG stuff
+//    if (IntArrays.sum(a_i)==0){
+//      System.out.println("my unnormalized log prediction: "+DoubleArrays.toString(logg_i));
+//      Classification pred = vars.maxent.classify(MalletMaxentTrainer.convert(vars.maxent.getAlphabet(), vars.maxent.getLabelAlphabet(), instance));
+//      LabelVector predvec = pred.getLabelVector();
+//      double[] values = new double[numClasses()];
+//      for (int l=0; l<values.length; l++){
+//        values[l] = predvec.value(l);
+//      }
+//      
+//      DoubleArrays.logNormalizeToSelf(logg_i);
+//      Preconditions.checkState(Math.abs(DoubleArrays.sum(values)-1)<1e-6);
+//      System.out.println(DoubleArrays.toString(values)+" vs \n"+DoubleArrays.toString(DoubleArrays.exp(logg_i))+"\n");
+////      System.out.println("maxent getparams:");
+////      System.out.println(DoubleArrays.toString(vars.maxent.getParameters()));
+////      System.out.println("my params:");
+////      System.out.println(Matrices.toString(maxLambda));
+////      System.out.println("");
+//    }
+    
     DoubleArrays.logNormalizeToSelf(logg_i);
+
+    
   }
   /** {@inheritDoc} */
   @Override
   public double[] fitOutOfCorpusInstance(DatasetInstance instance) {
 
     // precalculate 
-    if (digammaOfPis==null){
-      digammaOfPis = MeanFieldMultiRespModel.digammasOfArray(vars.pi);
-      digammaOfSummedPis = MeanFieldMultiRespModel.digammaOfSummedArray(vars.pi);
+    if (digammaOfNus==null){
       digammaOfNus = MeanFieldMultiRespModel.digammasOfTensor(vars.nu);
       digammaOfSummedNus = MeanFieldMultiRespModel.digammasOfArraysSummedOverLast(vars.nu);
+      maxLambda = trainer.maxWeights(vars.maxent, numClasses(), numFeatures());
     }
     
     // annotations
     int[][] a_i = Datasets.compileDenseAnnotations(instance, numClasses(), numAnnotators());
-
+    
+//  // sanity check: mallet's classification code should return the *same* thing as our code on unanntoated examples. 
+//    return vars.maxent.classify(MalletMaxentTrainer.convert(vars.maxent.getAlphabet(), vars.maxent.getLabelAlphabet(), instance)).getLabelVector().getValues();
+    
     double[] logg_i = new double[numClasses()];
-    fitG_i(logg_i, a_i, digammaOfPis, digammaOfSummedPis, digammaOfNus, digammaOfSummedNus);
+    fitG_i(logg_i, a_i, instance, digammaOfNus, digammaOfSummedNus, maxLambda);
+    
     return DoubleArrays.exp(logg_i);
   }
-  /** {@inheritDoc} */
+  
+  // Hack alert: I'm not sure what the bound should look like in this case, 
+  // where we are half variational and half EM. 
+  private static double jnt = 1; 
   @Override
   public double logJoint() {
-    double[][] g = Matrices.exp(vars.logg);
-    double[] summedG = Matrices.sumOverFirst(g);
-    double[] digammaOfPis = MeanFieldMultiRespModel.digammasOfArray(vars.pi);
-    double digammaOfSummedPis = Dirichlet.digamma(DoubleArrays.sum(vars.pi));
-    double[][][] digammaOfNus = MeanFieldMultiRespModel.digammasOfTensor(vars.nu);
-    double[][] digammaOfSummedNus = MeanFieldMultiRespModel.digammasOfArraysSummedOverLast(vars.nu);
-
-    // *********
-    // term 1
-    // *********
-    
-    // term 1 - theta normalizer
-    double t1thetanorm = GammaFunctions.logBetaSymmetric(priors.getBTheta(), numClasses());
-    
-    // term 1 - theta
-    double t1thetaterm = 0;
-    for (int k=0; k<numClasses(); k++){
-      double theta1 = priors.getBTheta() + summedG[k] - 1;
-      double theta2 = digammaOfPis[k] - digammaOfSummedPis;
-      t1thetaterm += theta1 * theta2;
+    if (jnt<100){
+      jnt++;
     }
-
-    // term 1 - gamma normalizer
-    double t1gammanorm = 0;
-    for (int j=0; j<numAnnotators(); j++){
-      for (int k=0; k<numClasses(); k++){
-        t1gammanorm += GammaFunctions.logBeta(gammaParams[j][k]);
-      }
-    }
+    return jnt; 
     
-    // term 1 - gamma
-    double t1gammaterm = 0;
-    for (int j=0; j<numAnnotators(); j++){
-      for (int k=0; k<numClasses(); k++){
-        for (int k2=0; k2<numClasses(); k2++){
-          double agterm = 0;
-          for (int i=0; i<numInstances(); i++){
-            agterm += this.a[i][j][k2] * g[i][k];
-          }
-          
-          double gamma1 = this.gammaParams[j][k][k2] + agterm - 1;
-          double gamma2 = digammaOfNus[j][k][k2] - digammaOfSummedNus[j][k];
-          t1gammaterm += gamma1 * gamma2;
-        }
-      }
-    }
-
-    // term 1 - a 
-    double t1aterm = 0;
-    for (int i=0; i<numInstances(); i++){
-      for (int j=0; j<numAnnotators(); j++){
-        double a1 = Gamma.logGamma(IntArrays.sum(this.a[i][j]) + 1);
-        double a2 = 0;
-        for (int k=0; k<numClasses(); k++){
-          a2 += Gamma.logGamma(this.a[i][j][k] + 1);
-        }
-        t1aterm += a1 - a2;
-      }
-    }
-    
-    double term1 = t1thetaterm + t1gammaterm - t1thetanorm - t1gammanorm + t1aterm;
-
-    // *********
-    // term 2
-    // *********
-    
-    // term 2 - theta normalizer
-    double t2thetanorm = GammaFunctions.logBeta(vars.pi);
-    
-    // term 2 - theta
-    double t2thetaterm = 0;
-    for (int k=0; k<numClasses(); k++){
-      double theta1 = vars.pi[k] - 1;
-      double theta2 = digammaOfPis[k] - digammaOfSummedPis;
-      
-      t2thetaterm += theta1 * theta2;
-    }
-    
-    // term 2 - gamma normalizer
-    double t2gammanorm = 0;
-    for (int j=0; j<numAnnotators(); j++){
-      for (int k=0; k<numClasses(); k++){
-        t2gammanorm += GammaFunctions.logBeta(vars.nu[j][k]);
-      }
-    }
-    
-    // term 2 - gamma
-    double t2gammaterm = 0;
-    for (int j=0; j<numAnnotators(); j++){
-      for (int k=0; k<numClasses(); k++){
-        for (int k2=0; k2<numClasses(); k2++){
-          double gamma1 = vars.nu[j][k][k2] - 1;
-          double gamma2 = digammaOfNus[j][k][k2] - digammaOfSummedNus[j][k];
-          
-          t2gammaterm += gamma1 * gamma2;
-        }
-      }
-    }
-    
-    // term 2 - g 
-    double t2gterm = 0;
-    for (int i=0; i<numInstances(); i++){
-      double gterm = 0;
-      for (int k=0; k<numClasses(); k++){
-        gterm += g[i][k] * vars.logg[i][k];
-      }
-      
-      t2gterm += gterm;
-    }
-    
-    double term2 = t2thetaterm + t2gammaterm + t2gterm - t2thetanorm - t2gammanorm;
-    
-    // debugging the validity of the variational bound
-    double div1 = (t2thetaterm + t2gterm - t2thetanorm) - (t1thetaterm - t1thetanorm);
-    double div2 = (t2gammaterm - t2gammanorm) - (t1gammaterm - t1gammanorm);
-    if (div1<0 || div2<0){
-      throw new RuntimeException("invalid variational bound. All divergences should be non-negative, "
-          + "but divergence1="+div1+" divergence2="+div2);
-    }
-    
-    // ********
-    // total
-    // ********
-    return term1 - term2;
   }
 
   
@@ -461,9 +362,9 @@ public class MeanFieldItemRespModel extends AbstractMeanFieldMultiAnnModel {
     return vars.logg.length;
   }
   private int numClasses(){
-    return vars.pi.length;
+    return data.getInfo().getNumClasses();
   }
-  private int numFeatures() {
+  private int numFeatures(){
     return data.getInfo().getNumFeatures();
   }
   
@@ -542,6 +443,7 @@ public class MeanFieldItemRespModel extends AbstractMeanFieldMultiAnnModel {
   public IntArrayCounter getMarginalYs() {
     throw new UnsupportedOperationException("not implemented");
   }
+  
 
 
   /** {@inheritDoc} */

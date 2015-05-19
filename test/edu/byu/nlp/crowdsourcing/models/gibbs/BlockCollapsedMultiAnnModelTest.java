@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package edu.byu.nlp.crowdsourcing.gibbs;
+package edu.byu.nlp.crowdsourcing.models.gibbs;
 
 import static java.lang.Math.log;
 import static org.apache.commons.math3.special.Gamma.logGamma;
@@ -33,7 +33,7 @@ import edu.byu.nlp.crowdsourcing.ModelInitialization;
 import edu.byu.nlp.crowdsourcing.ModelInitialization.AssignmentInitializer;
 import edu.byu.nlp.crowdsourcing.PriorSpecification;
 import edu.byu.nlp.crowdsourcing.TestUtil;
-import edu.byu.nlp.crowdsourcing.gibbs.BlockCollapsedMultiAnnModel.ModelBuilder;
+import edu.byu.nlp.crowdsourcing.models.gibbs.BlockCollapsedMultiAnnModel.ModelBuilder;
 import edu.byu.nlp.data.types.Dataset;
 import edu.byu.nlp.data.types.DatasetInstance;
 import edu.byu.nlp.data.types.SparseFeatureVector;
@@ -361,7 +361,7 @@ public class BlockCollapsedMultiAnnModelTest {
   }
   
   /**
-   * Test method for {@link edu.byu.nlp.crowdsourcing.gibbs.BlockCollapsedMultiAnnModel#newBuilder(edu.byu.nlp.crowdsourcing.PriorSpecification, edu.byu.nlp.cluster.Dataset, int, edu.byu.nlp.crowdsourcing.BlockCollapsedMultiAnnModel.AccuracyInitializer, edu.byu.nlp.crowdsourcing.BlockCollapsedMultiAnnModel.AccuracyInitializer, edu.byu.nlp.crowdsourcing.BlockCollapsedMultiAnnModel.AssignmentInitializer, org.apache.commons.math3.random.RandomGenerator)}.
+   * Test method for {@link edu.byu.nlp.crowdsourcing.models.gibbs.BlockCollapsedMultiAnnModel#newBuilder(edu.byu.nlp.crowdsourcing.PriorSpecification, edu.byu.nlp.cluster.Dataset, int, edu.byu.nlp.crowdsourcing.BlockCollapsedMultiAnnModel.AccuracyInitializer, edu.byu.nlp.crowdsourcing.BlockCollapsedMultiAnnModel.AccuracyInitializer, edu.byu.nlp.crowdsourcing.BlockCollapsedMultiAnnModel.AssignmentInitializer, org.apache.commons.math3.random.RandomGenerator)}.
    */
   @Test
   public void testNewBuilder() {

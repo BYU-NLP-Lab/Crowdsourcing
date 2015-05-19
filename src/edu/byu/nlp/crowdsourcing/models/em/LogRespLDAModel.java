@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package edu.byu.nlp.crowdsourcing.em;
+package edu.byu.nlp.crowdsourcing.models.em;
 
 import org.apache.commons.math3.random.RandomGenerator;
 import org.slf4j.Logger;
@@ -29,7 +29,7 @@ import edu.byu.nlp.classify.util.ModelTraining.SupportsTrainingOperations;
 import edu.byu.nlp.crowdsourcing.ModelInitialization.AssignmentInitializer;
 import edu.byu.nlp.crowdsourcing.ModelInitialization.MatrixAssignmentInitializer;
 import edu.byu.nlp.crowdsourcing.PriorSpecification;
-import edu.byu.nlp.crowdsourcing.em.ConfusedSLDADiscreteModel.State;
+import edu.byu.nlp.crowdsourcing.models.em.ConfusedSLDADiscreteModel.State;
 import edu.byu.nlp.data.types.Dataset;
 import edu.byu.nlp.util.Matrices;
 

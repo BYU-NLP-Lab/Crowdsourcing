@@ -33,7 +33,7 @@ import com.google.gson.JsonSyntaxException;
 
 import edu.byu.nlp.classify.eval.Prediction;
 import edu.byu.nlp.classify.eval.Predictions;
-import edu.byu.nlp.crowdsourcing.em.ConfusedSLDADiscreteModel;
+import edu.byu.nlp.crowdsourcing.models.em.ConfusedSLDADiscreteModel;
 import edu.byu.nlp.dataset.Datasets;
 import edu.byu.nlp.io.Files2;
 import edu.byu.nlp.util.Matrices;

@@ -1,4 +1,4 @@
-package edu.byu.nlp.crowdsourcing.meanfield;
+package edu.byu.nlp.crowdsourcing.models.meanfield;
 
 import java.util.ArrayList;
 

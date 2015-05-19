@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package edu.byu.nlp.crowdsourcing.meanfield;
+package edu.byu.nlp.crowdsourcing.models.meanfield;
 
 import java.util.Map;
 
@@ -26,18 +26,19 @@ import com.google.common.collect.Maps;
 
 import edu.byu.nlp.crowdsourcing.CrowdsourcingUtils;
 import edu.byu.nlp.crowdsourcing.PriorSpecification;
+import edu.byu.nlp.crowdsourcing.models.meanfield.MeanFieldMomRespModel;
 import edu.byu.nlp.data.types.Dataset;
 import edu.byu.nlp.util.DoubleArrays;
 
 /**
  * @author pfelt
  */
-public class MeanFieldMultiAnnModelTest {
+public class MeanFieldMomRespModelTest {
 
   // how many times should each stochastic test be run?
   private static final int reps = 100000;
   // start the trials with the following seed (will be incremented)
-  private static final int seedStart = 0;
+  private static final int seedStart = 10000;
 
   // test settings
   private static final int numClasses = 2;
@@ -45,7 +46,7 @@ public class MeanFieldMultiAnnModelTest {
   private static final int numInstances = 2;
   private static final int numFeatures = 2;
   
-  private static MeanFieldMultiRespModel buildModel(RandomGenerator rnd, int numClasses, int numAnnotators, int numInstances, int numFeatures){
+  private static MeanFieldMomRespModel buildModel(RandomGenerator rnd, int numClasses, int numAnnotators, int numInstances, int numFeatures){
 
     // priors
     double bTheta = rnd.nextDouble();
@@ -70,8 +71,6 @@ public class MeanFieldMultiAnnModelTest {
         countOfXAndF[i][f] = rnd.nextDouble();
       }
     }
-    double[][] muParams = new double[numClasses][numClasses]; 
-    CrowdsourcingUtils.initializeConfusionMatrixWithPrior(muParams, priors.getBMu(), priors.getCMu());
     double[][][] gammaParams = new double[numAnnotators][numClasses][numClasses];
     for (int j=0; j<numAnnotators; j++){
       CrowdsourcingUtils.initializeConfusionMatrixWithPrior(gammaParams[j], priors.getBGamma(j), priors.getCGamma());
@@ -81,16 +80,15 @@ public class MeanFieldMultiAnnModelTest {
       instanceIndices.put(""+i, i);
     }
     Dataset data = null;
-    MeanFieldMultiRespModel model = new MeanFieldMultiRespModel(priors, a, countOfXAndF, muParams, gammaParams, instanceIndices, data, rnd);
+//    MeanFieldMomRespModel model = new MeanFieldMomRespModel(priors, a, countOfXAndF, gammaParams, instanceIndices, data, rnd);
+    MeanFieldMomRespModel model = new MeanFieldMomRespModel(priors, a, gammaParams, instanceIndices, data, rnd);
     
     // init variables
     for (int i=0; i<numInstances; i++){
       for (int k=0; k<numClasses; k++){
         model.vars.logg[i][k] = rnd.nextDouble();
-        model.vars.logh[i][k] = rnd.nextDouble();
       }
       DoubleArrays.normalizeAndLogToSelf(model.vars.logg[i]);
-      DoubleArrays.normalizeAndLogToSelf(model.vars.logh[i]);
     }
     for (int k=0; k<numClasses; k++){
       model.vars.pi[k] = rnd.nextDouble()*10;
@@ -99,7 +97,6 @@ public class MeanFieldMultiAnnModelTest {
       for (int k=0; k<numClasses; k++){
         for (int k2=0; k2<numClasses; k2++){
           model.vars.nu[j][k][k2] = rnd.nextDouble()*10;
-          model.vars.tau[k][k2] = rnd.nextDouble()*10;
         }
       }
     }
@@ -110,7 +107,7 @@ public class MeanFieldMultiAnnModelTest {
     }
     return model;
   }
-
+  
   
   /**
    * ensure that for a variety of random settings, variational updates do not decrease the logJoint
@@ -121,38 +118,12 @@ public class MeanFieldMultiAnnModelTest {
     // g
     for (int test=seedStart; test<seedStart+reps; test++){
       RandomGenerator rnd = new MersenneTwister(test);
-      MeanFieldMultiRespModel model = buildModel(rnd, numClasses, numAnnotators, numInstances, numFeatures);
-      model.fitH(model.vars.logh);
+      MeanFieldMomRespModel model = buildModel(rnd, numClasses, numAnnotators, numInstances, numFeatures);
       model.fitPi(model.vars.pi);
-      model.fitTau(model.vars.tau);
       model.fitNu(model.vars.nu);
       model.fitLambda(model.vars.lambda);
       double before = model.logJoint();
       model.fitG(model.vars.logg);
-      double after = model.logJoint();
-      Assertions.assertThat(after).isGreaterThanOrEqualTo(before);
-    }
-    
-  }
-  
-
-  /**
-   * ensure that for a variety of random settings, variational updates do not decrease the logJoint
-   */
-  @Test
-  public void testMaximizeH() {
-
-    // h
-    for (int test=seedStart; test<seedStart+reps; test++){
-      RandomGenerator rnd = new MersenneTwister(test);
-      MeanFieldMultiRespModel model = buildModel(rnd, numClasses, numAnnotators, numInstances, numFeatures);
-      model.fitG(model.vars.logg);
-      model.fitPi(model.vars.pi);
-      model.fitTau(model.vars.tau);
-      model.fitNu(model.vars.nu);
-      model.fitLambda(model.vars.lambda);
-      double before = model.logJoint();
-      model.fitH(model.vars.logh);
       double after = model.logJoint();
       Assertions.assertThat(after).isGreaterThanOrEqualTo(before);
     }
@@ -169,12 +140,10 @@ public class MeanFieldMultiAnnModelTest {
     // lambda
     for (int test=seedStart; test<seedStart+reps; test++){
       RandomGenerator rnd = new MersenneTwister(test);
-      MeanFieldMultiRespModel model = buildModel(rnd, numClasses, numAnnotators, numInstances, numFeatures);
-      model.fitG(model.vars.logg);
+      MeanFieldMomRespModel model = buildModel(rnd, numClasses, numAnnotators, numInstances, numFeatures);
       model.fitPi(model.vars.pi);
-      model.fitTau(model.vars.tau);
       model.fitNu(model.vars.nu);
-      model.fitH(model.vars.logh);
+      model.fitG(model.vars.logg);
       double before = model.logJoint();
       model.fitLambda(model.vars.lambda);
       double after = model.logJoint();
@@ -182,73 +151,43 @@ public class MeanFieldMultiAnnModelTest {
     }
     
   }
-  
 
   /**
    * ensure that for a variety of random settings, variational updates do not decrease the logJoint
    */
   @Test
   public void testMaximizeNu() {
-
+    
     // nu
     for (int test=seedStart; test<seedStart+reps; test++){
       RandomGenerator rnd = new MersenneTwister(test);
-      MeanFieldMultiRespModel model = buildModel(rnd, numClasses, numAnnotators, numInstances, numFeatures);
-      model.fitG(model.vars.logg);
+      MeanFieldMomRespModel model = buildModel(rnd, numClasses, numAnnotators, numInstances, numFeatures);
       model.fitPi(model.vars.pi);
-      model.fitTau(model.vars.tau);
-      model.fitH(model.vars.logh);
+      model.fitG(model.vars.logg);
       model.fitLambda(model.vars.lambda);
       double before = model.logJoint();
       model.fitNu(model.vars.nu);
       double after = model.logJoint();
       Assertions.assertThat(after).isGreaterThanOrEqualTo(before);
     }
-    
+
   }
-  
 
   /**
    * ensure that for a variety of random settings, variational updates do not decrease the logJoint
    */
   @Test
   public void testMaximizePi() {
-
+    
     // pi
     for (int test=seedStart; test<seedStart+reps; test++){
       RandomGenerator rnd = new MersenneTwister(test);
-      MeanFieldMultiRespModel model = buildModel(rnd, numClasses, numAnnotators, numInstances, numFeatures);
+      MeanFieldMomRespModel model = buildModel(rnd, numClasses, numAnnotators, numInstances, numFeatures);
       model.fitG(model.vars.logg);
-      model.fitH(model.vars.logh);
-      model.fitTau(model.vars.tau);
       model.fitNu(model.vars.nu);
       model.fitLambda(model.vars.lambda);
       double before = model.logJoint();
       model.fitPi(model.vars.pi);
-      double after = model.logJoint();
-      Assertions.assertThat(after).isGreaterThanOrEqualTo(before);
-    }
-
-  }
-  
-
-  /**
-   * ensure that for a variety of random settings, variational updates do not decrease the logJoint
-   */
-  @Test
-  public void testMaximizeTau() {
-
-    // tau
-    for (int test=seedStart; test<seedStart+reps; test++){
-      RandomGenerator rnd = new MersenneTwister(test);
-      MeanFieldMultiRespModel model = buildModel(rnd, numClasses, numAnnotators, numInstances, numFeatures);
-      model.fitG(model.vars.logg);
-      model.fitPi(model.vars.pi);
-      model.fitH(model.vars.logh);
-      model.fitNu(model.vars.nu);
-      model.fitLambda(model.vars.lambda);
-      double before = model.logJoint();
-      model.fitTau(model.vars.tau);
       double after = model.logJoint();
       Assertions.assertThat(after).isGreaterThanOrEqualTo(before);
     }

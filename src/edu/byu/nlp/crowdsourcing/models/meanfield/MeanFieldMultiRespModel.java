@@ -11,9 +11,10 @@
  * or implied. See the License for the specific language governing permissions and limitations under
  * the License.
  */
-package edu.byu.nlp.crowdsourcing.meanfield;
+package edu.byu.nlp.crowdsourcing.models.meanfield;
 
 import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 
 import org.apache.commons.math3.random.RandomGenerator;
@@ -41,6 +42,7 @@ import edu.byu.nlp.math.optimize.ConvergenceCheckers;
 import edu.byu.nlp.math.optimize.IterativeOptimizer;
 import edu.byu.nlp.math.optimize.IterativeOptimizer.ReturnType;
 import edu.byu.nlp.math.optimize.ValueAndObject;
+import edu.byu.nlp.stats.DirichletDistribution;
 import edu.byu.nlp.stats.SymmetricDirichletMultinomialDiagonalMatrixMAPOptimizable;
 import edu.byu.nlp.stats.SymmetricDirichletMultinomialMatrixMAPOptimizable;
 import edu.byu.nlp.util.DoubleArrays;
@@ -53,15 +55,16 @@ import edu.byu.nlp.util.Pair;
 /**
  * @author pfelt
  */
-public class MeanFieldMomRespModel extends AbstractMeanFieldMultiAnnModel {
+public class MeanFieldMultiRespModel extends AbstractMeanFieldMultiAnnModel {
 
-  private static final Logger logger = LoggerFactory.getLogger(MeanFieldMomRespModel.class);
+  private static final Logger logger = LoggerFactory.getLogger(MeanFieldMultiRespModel.class);
 
   private static double INITIALIZATION_SMOOTHING = 1e-6; 
   
 //  private static double LOG_CATEGORICAL_SMOOTHING = Math.log(1e-100);
   
   PriorSpecification priors;
+  double[][] muParams;
   double[][][] gammaParams;
   
   private Dataset data;
@@ -75,27 +78,35 @@ public class MeanFieldMomRespModel extends AbstractMeanFieldMultiAnnModel {
   // cached values
   private double[] digammaOfPis;
   private double digammaOfSummedPis;
+  private double[][] digammaOfTaus;
   private double[][][] digammaOfNus;
+  private double[] digammaOfSummedTaus;
   private double[][] digammaOfSummedNus;
   private double[][] digammaOfLambdas;
   private double[] digammaOfSummedLambda;
-  private double[][] documents;
+
   
   static class VariationalParams{
     double[][] logg; // g(y) dim=NxK
+    double[][] logh; // h(m) dim=NxK
     double[] pi;  // pi(theta) dim=J
     double[][][] nu; // nu(gamma) dim=JxKxK
+    double[][] tau; // tau(mu) dim=KxK
     double[][] lambda; // lambda(phi) dim=KxF
     public VariationalParams(int numClasses, int numAnnotators, int numInstances, int numFeatures){
       this.logg = new double[numInstances][numClasses];
+      this.logh = new double[numInstances][numClasses];
       this.pi = new double[numClasses];
       this.nu = new double[numAnnotators][numClasses][numClasses];
+      this.tau = new double[numClasses][numClasses];
       this.lambda = new double[numClasses][numFeatures];
     }
     public void clonetoSelf(VariationalParams other){
       this.logg = Matrices.clone(other.logg);
+      this.logh = Matrices.clone(other.logh);
       this.pi = other.pi.clone();
       this.nu = Matrices.clone(other.nu);
+      this.tau = Matrices.clone(other.tau);
       this.lambda = Matrices.clone(other.lambda);
     }
   }
@@ -111,21 +122,23 @@ public class MeanFieldMomRespModel extends AbstractMeanFieldMultiAnnModel {
         double[] docSize, double[][] numAnnsPerJAndY, int[][] docJCount,
         double initialTemp, double[] lambdas, int[] gold,
         RandomGenerator rnd) {
+
+      // data counts
+      double[][] countOfXAndF = Datasets.toFeatureArray(data);
+
+      // data
+      List<Map<Integer, Double>> x = Datasets.toSparseFeatureArray(data);
       
       // priors
+      double[][] muParams = new double[logCountOfY.length][logCountOfY.length];
+      CrowdsourcingUtils.initializeConfusionMatrixWithPrior(muParams, priors.getBMu(), priors.getCMu());
       double[][][] gammaParams = new double[countOfJYAndA.length][logCountOfY.length][logCountOfY.length];
       for (int j=0; j<countOfJYAndA.length; j++){
         CrowdsourcingUtils.initializeConfusionMatrixWithPrior(gammaParams[j], priors.getBGamma(j), 1);
       }
       
-      if (Datasets.minFeatureValue(data)<0){
-        logger.warn("detected negative feature weights which momresp is unabel to handle. Scaling to between 0-100.");
-        // ensure dataset features are all positive (negative numbers violate momresp's features:=counts assumption).
-        data = Datasets.scaleFeatureValues(data,0,100);
-      }
-      
       // create model and initialize with empirical counts
-      MeanFieldMomRespModel model = new MeanFieldMomRespModel(priors,a,gammaParams,instanceIndices,data,rnd);
+      MeanFieldMultiRespModel model = new MeanFieldMultiRespModel(priors,a,countOfXAndF,muParams,gammaParams,instanceIndices,data,rnd);
       model.empiricalFit();
       
       return model;
@@ -134,18 +147,19 @@ public class MeanFieldMomRespModel extends AbstractMeanFieldMultiAnnModel {
   }
 
   
-  public MeanFieldMomRespModel(PriorSpecification priors, int[][][] a,  
-      double[][][] gammaParams, Map<String,Integer> instanceIndices, Dataset data, RandomGenerator rnd) {
+  public MeanFieldMultiRespModel(PriorSpecification priors, int[][][] a, double[][] countOfXAndF,  
+      double[][] muParams, double[][][] gammaParams, Map<String,Integer> instanceIndices, Dataset data, RandomGenerator rnd) {
     this.priors=priors;
     this.a=a;
     this.data=data;
-    this.docSizes = Datasets.countDocSizes(data);
     this.instances = Lists.newArrayList(data);
+    this.docSizes = Datasets.countDocSizes(data);
+    this.muParams=muParams;
     this.gammaParams=gammaParams;
     this.instanceIndices=instanceIndices;
     this.rnd=rnd;
-    this.vars = new VariationalParams(gammaParams[0].length,gammaParams.length,a.length,data.getInfo().getNumFeatures());
-    this.newvars = new VariationalParams(gammaParams[0].length,gammaParams.length,a.length,data.getInfo().getNumFeatures());
+    this.vars = new VariationalParams(muParams.length,gammaParams.length,a.length,countOfXAndF[0].length);
+    this.newvars = new VariationalParams(muParams.length,gammaParams.length,a.length,countOfXAndF[0].length);
   }
 
   
@@ -160,9 +174,17 @@ public class MeanFieldMomRespModel extends AbstractMeanFieldMultiAnnModel {
       }
       DoubleArrays.normalizeAndLogToSelf(vars.logg[i]);
     }
+    // initialize h
+    for (int i=0; i<vars.logg.length; i++){
+//      vars.logh[i] = DirichletDistribution.logSample(DoubleArrays.exp(vars.logg[i]), rnd);
+      vars.logh[i] = DirichletDistribution.logSample(DoubleArrays.of(1, numClasses()), rnd);
+      DoubleArrays.normalizeAndLogToSelf(vars.logh[i]);
+//      vars.logh[i] = vars.logg[i].clone();
+    }
     // init params based on g and h
     fitPi(vars.pi);
     fitNu(vars.nu);
+    fitTau(vars.tau);
     fitLambda(vars.lambda);
     
     // make sure both sets of parameter values match
@@ -175,10 +197,10 @@ public class MeanFieldMomRespModel extends AbstractMeanFieldMultiAnnModel {
     
     return new MeanFieldMultiAnnState(
         Matrices.exp(vars.logg), 
-        Matrices.exp(vars.logg), // h  
+        Matrices.exp(vars.logh),  
         vars.pi, 
         vars.nu, 
-        Matrices.of(1, numClasses(), numClasses()), // tau 
+        vars.tau, // tau 
         vars.lambda, // lambda
         data, instanceIndices);
   }
@@ -186,10 +208,11 @@ public class MeanFieldMomRespModel extends AbstractMeanFieldMultiAnnModel {
   /** {@inheritDoc} */
   @Override
   public void maximize() {
-    // optimize posterior distributions wrt one another
     fitG(newvars.logg);
+    fitH(newvars.logh);
     fitPi(newvars.pi);
     fitNu(newvars.nu);
+    fitTau(newvars.tau);
     fitLambda(newvars.lambda);
     
     // swap in new values
@@ -197,14 +220,228 @@ public class MeanFieldMomRespModel extends AbstractMeanFieldMultiAnnModel {
     this.vars = this.newvars;
     this.newvars = tmpvars;
     
-    // optimize hyperparameters wrt current posterior distributions
+    // optimize hyperparameters
     if (priors.getInlineHyperparamTuning()){
       fitBTheta();
       fitBPhi();
       fitBGamma();
+      // TODO: fit mu hypers?
     }
   }
 
+  
+  public void fitPi(double[] pi) {
+    double[][] g = Matrices.exp(vars.logg);
+    
+    double[] summedClasses = Matrices.sumOverFirst(g);
+    DoubleArrays.addToSelf(summedClasses, priors.getBTheta());
+    for (int k=0; k<pi.length; k++){
+      pi[k] = summedClasses[k];
+    }
+  }
+  public void fitNu(double[][][] nu) {
+    double[][] g = Matrices.exp(vars.logg);
+    
+    for (int j=0; j<numAnnotators(); j++){
+      for (int k1=0; k1<numClasses(); k1++){
+        for (int k2=0; k2<numClasses(); k2++){
+          double nu1 = gammaParams[j][k1][k2];
+          // TODO: can this be done more efficiently?
+          double nu2 = 0;
+          for (int i=0; i<numInstances(); i++){
+            nu2 += a[i][j][k2] * g[i][k1];
+          }
+          
+          nu[j][k1][k2] = nu1 + nu2; 
+        }
+      }
+    }
+  }
+  public void fitTau(double[][] tau) {
+    double[][] g = Matrices.exp(vars.logg);
+    double[][] h = Matrices.exp(vars.logh);
+    
+    for (int k1=0; k1<numClasses(); k1++){
+      for (int k2=0; k2<numClasses(); k2++){
+        tau[k1][k2] = muParams[k1][k2];
+        // TODO: can this be done more efficiently?
+        for (int i=0; i<numInstances(); i++){
+          tau[k1][k2] += g[i][k1] * h[i][k2];
+        }
+      }
+    }
+  }
+  public void fitLambda(final double[][] lambda) {
+    double[][] h = Matrices.exp(vars.logh);
+    
+//    // this form implements the math clearly, but is inefficient 
+//    // TODO: iterate sparsely through non-zero features
+//    for (int k=0; k<numClasses(); k++){
+//      for (int f=0; f<numFeatures(); f++){
+//        lambda[k][f] = priors.getBPhi();
+//        for (int i=0; i<numInstances(); i++){
+//          double xval = (x.get(i).containsKey(f))? x.get(i).get(f): 0;
+//          lambda[k][f] += xval * h[i][k];
+//        }
+//      }
+//    }
+
+  // this version reverses the loops over i and f in order to loop sparsely over the 
+  // non-zero features of the data. 
+  // since this version is hard to read, I'm leaving the version above commented out.
+  for (int k=0; k<numClasses(); k++){
+
+    // initialize
+    for (int f=0; f<numFeatures(); f++){
+      lambda[k][f] = priors.getBPhi();
+    }
+    
+    for (int i=0; i<numInstances(); i++){
+      final double hik = h[i][k];
+      final int kk = k;
+      
+      // for each feature f
+      instances.get(i).asFeatureVector().visitSparseEntries(new EntryVisitor() {
+        @Override
+        public void visitEntry(int f, double x_if) {
+          lambda[kk][f] += x_if * hik;
+        }
+      });
+    }
+  }
+    
+  }
+  public void fitG(double[][] logg) {
+    double[][] h = Matrices.exp(vars.logh);
+    
+    // precalculate 
+    double[] digammaOfPis = digammasOfArray(vars.pi);
+    double digammaOfSummedPis = digammaOfSummedArray(vars.pi);
+    double[][] digammaOfTaus = digammasOfMatrix(vars.tau);
+    double[] digammaOfSummedTaus = digammasOfArraysSummedOverSecond(vars.tau);
+    double[][][] digammaOfNus = digammasOfTensor(vars.nu);
+    double[][] digammaOfSummedNus = digammasOfArraysSummedOverLast(vars.nu);
+    
+    for (int i=0; i<numInstances(); i++){
+      fitG_i(logg[i],a[i],h[i],digammaOfPis,digammaOfSummedPis,digammaOfTaus,digammaOfSummedTaus,digammaOfNus,digammaOfSummedNus);
+    }
+  }
+  /**
+   * This part is factored out of the main fitG method to make generalization inference easier
+   * (fit an arbitrary g given annotation info and all other params in a model)
+   */
+  public void fitG_i(double[] logg_i, int[][] a_i, double[] h_i, 
+      double[] digammaOfPis, double digammaOfSummedPis, double[][] digammaOfTaus, double[] digammaOfSummedTaus, 
+      double[][][] digammaOfNus, double[][] digammaOfSummedNus) {
+    for (int k=0; k<numClasses(); k++){
+      
+      double term1 = 0;
+      term1 += digammaOfPis[k] - digammaOfSummedPis;
+      
+      double term2 = 0;
+      for (int k2=0; k2<numClasses(); k2++){
+        term2 += h_i[k2] * (digammaOfTaus[k][k2] - digammaOfSummedTaus[k]);
+      }
+      
+      double term3 = 0;
+      for (int j=0; j<numAnnotators(); j++){
+        for (int k2=0; k2<numClasses(); k2++){
+          term3 += a_i[j][k2] * (digammaOfNus[j][k][k2] - digammaOfSummedNus[j][k]);
+        }
+      }
+      
+      logg_i[k] = term1 + term2 + term3; 
+    }
+    DoubleArrays.logNormalizeToSelf(logg_i);
+  }
+  public void fitH(double[][] logh) {
+    // precalculate 
+    double[][] digammaOfTaus = digammasOfMatrix(vars.tau);
+    double[] digammaOfSummedTaus = digammasOfArraysSummedOverSecond(vars.tau);
+    double[][] digammaOfLambdas = digammasOfMatrix(vars.lambda);
+    double[] digammaOfSummedLambda = digammasOfArraysSummedOverSecond(vars.lambda);
+    double[][] g = Matrices.exp(vars.logg);
+    
+    for (int i=0; i<numInstances(); i++){
+      fitH_i(logh[i],instances.get(i),g[i],digammaOfTaus,digammaOfSummedTaus,digammaOfLambdas,digammaOfSummedLambda);
+    }
+  }
+  public void fitH_i(double[] logh_i, DatasetInstance instance, double[] g_i, double[][] digammaOfTaus, double[] digammaOfSummedTaus, 
+      final double[][] digammaOfLambdas, final double[] digammaOfSummedLambda){
+    for (int k2=0; k2<numClasses(); k2++){
+      
+      double term1 = 0;
+      for (int k=0; k<numClasses(); k++){
+        term1 += g_i[k] * (digammaOfTaus[k][k2] - digammaOfSummedTaus[k]);
+      }
+      
+      // original version: more clear but less efficient
+//      double term2 = 0;
+//      for (int f=0; f<numFeatures(); f++){
+//        double phi1 = (x_i.containsKey(f))? x_i.get(f): 0;
+//        double phi2 = digammaOfLambdas[k2][f] - digammaOfSummedLambda[k2];
+//        term2 += phi1 * phi2;
+//      }
+
+      final double[] term2 = new double[]{0}; // this is only an array so it can be final AND mutable
+      final int kk22 = k2;
+      instance.asFeatureVector().visitSparseEntries(new EntryVisitor() {
+        @Override
+        public void visitEntry(int f, double x_if) {
+          double phi1 = x_if;
+          double phi2 = digammaOfLambdas[kk22][f] - digammaOfSummedLambda[kk22];
+          term2[0] += phi1 * phi2;
+        }
+      });
+
+      logh_i[k2] = term1 + term2[0]; 
+    }
+    DoubleArrays.logNormalizeToSelf(logh_i);
+  }
+  /** {@inheritDoc} */
+  @Override
+  public double[] fitOutOfCorpusInstance(DatasetInstance instance) {
+    // precalculate
+    if (digammaOfPis==null){
+      digammaOfPis = MeanFieldMultiRespModel.digammasOfArray(vars.pi);
+      digammaOfSummedPis = MeanFieldMultiRespModel.digammaOfSummedArray(vars.pi);
+      digammaOfTaus = MeanFieldMultiRespModel.digammasOfMatrix(vars.tau);
+      digammaOfSummedTaus = MeanFieldMultiRespModel.digammasOfArraysSummedOverSecond(vars.tau);
+      digammaOfNus = MeanFieldMultiRespModel.digammasOfTensor(vars.nu);
+      digammaOfSummedNus = MeanFieldMultiRespModel.digammasOfArraysSummedOverLast(vars.nu);
+      digammaOfLambdas = MeanFieldMultiRespModel.digammasOfMatrix(vars.lambda);
+      digammaOfSummedLambda = MeanFieldMultiRespModel.digammasOfArraysSummedOverSecond(vars.lambda);
+    }
+
+    // annotations
+    int[][] a_i = Datasets.compileDenseAnnotations(instance, numClasses(), numAnnotators());
+    
+    double[] logg_i = DoubleArrays.of(1, numClasses());
+    double[] logh_i = DoubleArrays.of(1, numClasses());
+    
+//    // fit g_i and h_i iteratively (doing it right)
+//    int iterations = 0;
+//    double curr = Double.MIN_VALUE, improvement = Double.MIN_VALUE;
+//    do {
+//      fitG_i(logg_i, a_i, DoubleArrays.exp(logh_i), digammaOfPis, digammaOfSummedPis, digammaOfTaus, digammaOfSummedTaus, digammaOfNus, digammaOfSummedNus);
+//      fitH_i(logh_i, instance, DoubleArrays.exp(logg_i), digammaOfTaus, digammaOfSummedTaus, digammaOfLambdas, digammaOfSummedLambda);
+//      if (iterations%MultiAnnModelTraining.MAXIMIZE_BATCH_SIZE==0){
+//        double next = logJoint();
+//        improvement = next-curr;
+//        curr = next;
+//        logger.info("iteration "+iterations+" out-of-corpus bound "+curr);
+//      }
+//    } while(improvement>MultiAnnModelTraining.MAXIMIZE_IMPROVEMENT_THRESHOLD && iterations<MultiAnnModelTraining.MAXIMIZE_MAX_ITERATIONS);
+
+    // fit g_i and h_i iteratively (doing it quick)
+    for (int i=0; i<10; i++){
+      fitG_i(logg_i, a_i, DoubleArrays.exp(logh_i), digammaOfPis, digammaOfSummedPis, digammaOfTaus, digammaOfSummedTaus, digammaOfNus, digammaOfSummedNus);
+      fitH_i(logh_i, instance, DoubleArrays.exp(logg_i), digammaOfTaus, digammaOfSummedTaus, digammaOfLambdas, digammaOfSummedLambda);
+    }
+    
+    return DoubleArrays.exp(logg_i);
+  }
+  
 
   private void fitBTheta() {
     logger.info("optimizing btheta in light of most recent posterior assignments");
@@ -260,154 +497,20 @@ public class MeanFieldMomRespModel extends AbstractMeanFieldMultiAnnModel {
     logger.info("new bgamma="+optimum.getObject()+" old bgamma="+oldValue);
   }
   
-  public void fitPi(double[] pi) {
-    double[][] g = Matrices.exp(vars.logg);
-    
-    double[] summedClasses = Matrices.sumOverFirst(g);
-    DoubleArrays.addToSelf(summedClasses, priors.getBTheta());
-    for (int k=0; k<pi.length; k++){
-      pi[k] = summedClasses[k];
-    }
-  }
-  public void fitNu(double[][][] nu) {
-    double[][] g = Matrices.exp(vars.logg);
-    
-    for (int j=0; j<numAnnotators(); j++){
-      for (int k1=0; k1<numClasses(); k1++){
-        for (int k2=0; k2<numClasses(); k2++){
-          double nu1 = gammaParams[j][k1][k2];
-          // TODO: can this be done more efficiently?
-          double nu2 = 0;
-          for (int i=0; i<numInstances(); i++){
-            nu2 += a[i][j][k2] * g[i][k1];
-          }
-          
-          nu[j][k1][k2] = nu1 + nu2; 
-        }
-      }
-    }
-  }
-  public void fitLambda(final double[][] lambda) {
-    double[][] g = Matrices.exp(vars.logg);
-    
-//    // this form implements the math clearly, but is inefficient 
-//    // TODO: iterate sparsely through non-zero features
-//    for (int k=0; k<numClasses(); k++){
-//      for (int f=0; f<numFeatures(); f++){
-//        lambda[k][f] = priors.getBPhi();
-//        for (int i=0; i<numInstances(); i++){
-//          lambda[k][f] += countOfXAndF[i][f] * g[i][k];
-//        }
-//      }
-//    }
-    
-    // this version reverses the loops over i and f in order to loop sparsely over the 
-    // non-zero features of the data. 
-    // since this version is hard to read, I'm leaving the version above commented out.
-    for (int k=0; k<numClasses(); k++){
-
-      // initialize
-      for (int f=0; f<numFeatures(); f++){
-        lambda[k][f] = priors.getBPhi();
-      }
-      
-      for (int i=0; i<numInstances(); i++){
-        final double hik = g[i][k];
-        final int kk = k;
-        
-        // for each feature f
-        instances.get(i).asFeatureVector().visitSparseEntries(new EntryVisitor() {
-          @Override
-          public void visitEntry(int f, double x_if) {
-            lambda[kk][f] += x_if * hik;
-          }
-        });
-      }
-    }
-  }
-  public void fitG(double[][] logg) {
-    
-    // precalculate 
-    double[] digammaOfPis = MeanFieldMultiRespModel.digammasOfArray(vars.pi);
-    double digammaOfSummedPis = MeanFieldMultiRespModel.digammaOfSummedArray(vars.pi);
-    double[][][] digammaOfNus = MeanFieldMultiRespModel.digammasOfTensor(vars.nu);
-    double[][] digammaOfSummedNus = MeanFieldMultiRespModel.digammasOfArraysSummedOverLast(vars.nu);
-    double[][] digammaOfLambdas = MeanFieldMultiRespModel.digammasOfMatrix(vars.lambda);
-    double[] digammaOfSummedLambda = MeanFieldMultiRespModel.digammasOfArraysSummedOverSecond(vars.lambda);
-    
-    for (int i=0; i<numInstances(); i++){
-      fitG_i(logg[i],a[i],instances.get(i),digammaOfPis,digammaOfSummedPis,digammaOfNus,digammaOfSummedNus,
-          digammaOfLambdas,digammaOfSummedLambda);
-    }
-  }
-  public void fitG_i(double[] logg_i, int[][] a_i, DatasetInstance instance, double[] digammaOfPis, double digammaOfSummedPis, 
-      double[][][] digammaOfNus, double[][] digammaOfSummedNus, final double[][] digammaOfLambdas, final double[] digammaOfSummedLambda) {
-    for (int k=0; k<numClasses(); k++){
-      
-      double term1 = 0;
-      term1 += digammaOfPis[k] - digammaOfSummedPis;
-      
-//      double term2 = 0;
-//      for (int f=0; f<numFeatures(); f++){
-//        double phi1 = countOfXAndF_i[f];
-//        double phi2 = digammaOfLambdas[k][f] - digammaOfSummedLambda[k];
-//        term2 += phi1 * phi2; 
-//      }
-
-      final double[] term2 = new double[]{0}; // this is only an array so it can be final AND mutable
-      final int kk = k;
-      instance.asFeatureVector().visitSparseEntries(new EntryVisitor() {
-        @Override
-        public void visitEntry(int f, double x_if) {
-          double phi1 = x_if;
-          double phi2 = digammaOfLambdas[kk][f] - digammaOfSummedLambda[kk];
-          term2[0] += phi1 * phi2;
-        }
-      });
-      
-      double term3 = 0;
-      for (int j=0; j<numAnnotators(); j++){
-        for (int k2=0; k2<numClasses(); k2++){
-          term3 += a_i[j][k2] * (digammaOfNus[j][k][k2] - digammaOfSummedNus[j][k]);
-        }
-      }
-      
-      logg_i[k] = term1 + term2[0] + term3; 
-    }
-    DoubleArrays.logNormalizeToSelf(logg_i);
-  }
-  /** {@inheritDoc} */
-  @Override
-  public double[] fitOutOfCorpusInstance(DatasetInstance instance) {
-
-    // precalculate 
-    if (digammaOfPis==null){
-      digammaOfPis = MeanFieldMultiRespModel.digammasOfArray(vars.pi);
-      digammaOfSummedPis = MeanFieldMultiRespModel.digammaOfSummedArray(vars.pi);
-      digammaOfNus = MeanFieldMultiRespModel.digammasOfTensor(vars.nu);
-      digammaOfSummedNus = MeanFieldMultiRespModel.digammasOfArraysSummedOverLast(vars.nu);
-      digammaOfLambdas = MeanFieldMultiRespModel.digammasOfMatrix(vars.lambda);
-      digammaOfSummedLambda = MeanFieldMultiRespModel.digammasOfArraysSummedOverSecond(vars.lambda);
-    }
-    
-    // annotations
-    int[][] a_i = Datasets.compileDenseAnnotations(instance, numClasses(), numAnnotators());
-    
-    double[] logg_i = new double[numClasses()];
-    fitG_i(logg_i, a_i, instance, digammaOfPis, digammaOfSummedPis, digammaOfNus, digammaOfSummedNus, digammaOfLambdas, digammaOfSummedLambda);
-    return DoubleArrays.exp(logg_i);
-  }
   /** {@inheritDoc} */
   @Override
   public double logJoint() {
     double[][] g = Matrices.exp(vars.logg);
+    double[][] h = Matrices.exp(vars.logh);
     double[] summedG = Matrices.sumOverFirst(g);
-    double[] digammaOfPis = MeanFieldMultiRespModel.digammasOfArray(vars.pi);
+    double[] digammaOfPis = digammasOfArray(vars.pi);
     double digammaOfSummedPis = Dirichlet.digamma(DoubleArrays.sum(vars.pi));
-    double[][][] digammaOfNus = MeanFieldMultiRespModel.digammasOfTensor(vars.nu);
-    double[][] digammaOfSummedNus = MeanFieldMultiRespModel.digammasOfArraysSummedOverLast(vars.nu);
-    double[][] digammaOfLambdas = MeanFieldMultiRespModel.digammasOfMatrix(vars.lambda);
-    double[] digammaOfSummedLambda = MeanFieldMultiRespModel.digammasOfArraysSummedOverSecond(vars.lambda);
+    double[][] digammaOfTaus = digammasOfMatrix(vars.tau);
+    double[] digammaOfSummedTaus = digammasOfArraysSummedOverSecond(vars.tau);
+    double[][][] digammaOfNus = digammasOfTensor(vars.nu);
+    double[][] digammaOfSummedNus = digammasOfArraysSummedOverLast(vars.nu);
+    double[][] digammaOfLambdas = digammasOfMatrix(vars.lambda);
+    double[] digammaOfSummedLambda = digammasOfArraysSummedOverSecond(vars.lambda);
 
     // *********
     // term 1
@@ -422,6 +525,27 @@ public class MeanFieldMomRespModel extends AbstractMeanFieldMultiAnnModel {
       double theta1 = priors.getBTheta() + summedG[k] - 1;
       double theta2 = digammaOfPis[k] - digammaOfSummedPis;
       t1thetaterm += theta1 * theta2;
+    }
+
+    // term 1 - mu normalizer
+    double t1munorm = 0;
+    for (int k=0; k<numClasses(); k++){
+      t1munorm += GammaFunctions.logBeta(muParams[k]);
+    }
+    
+    // term 1 - mu
+    double t1muterm = 0;
+    for (int k=0; k<numClasses(); k++){
+      for (int k2=0; k2<numClasses(); k2++){
+        double ghterm = 0;
+        for (int i=0; i<numInstances(); i++){
+          ghterm += g[i][k] * h[i][k2];
+        }
+        
+        double mu1 = muParams[k][k2] + ghterm - 1;
+        double mu2 = digammaOfTaus[k][k2] - digammaOfSummedTaus[k];
+        t1muterm += mu1 * mu2;
+      }
     }
 
     // term 1 - gamma normalizer
@@ -462,7 +586,9 @@ public class MeanFieldMomRespModel extends AbstractMeanFieldMultiAnnModel {
 //      for (int f=0; f<numFeatures(); f++){
 //        double xhterm = 0;
 //        for (int i=0; i<numInstances(); i++){
-//          xhterm += this.countOfXAndF[i][f] * g[i][k];
+//          // TODO: very slow
+//          double xval = (x.get(i).containsKey(f))? x.get(i).get(f): 0;
+//          xhterm += xval * h[i][k];
 //        }
 //        
 //        double phi1 = this.priors.getBPhi() + xhterm - 1;
@@ -470,7 +596,6 @@ public class MeanFieldMomRespModel extends AbstractMeanFieldMultiAnnModel {
 //        t1phiterm += phi1 * phi2;
 //      }
       
-
       // faster but hard to read (distributive law, regroup, reverse sums over i and f)
       // compute phi expectations and deal with (prior-1)
       final double[] expected_phi = new double[numFeatures()];
@@ -487,7 +612,7 @@ public class MeanFieldMomRespModel extends AbstractMeanFieldMultiAnnModel {
           }
         });
         
-        t1phiterm += g[i][k] * phidataterm[0];
+        t1phiterm += h[i][k] * phidataterm[0];
       }
     }
     
@@ -508,10 +633,10 @@ public class MeanFieldMomRespModel extends AbstractMeanFieldMultiAnnModel {
     double t1xterm = 0;
     for (int i=0; i<numInstances(); i++){
       double x1 = Gamma.logGamma(docSizes[i] + 1);
-//    // easier to read (dense) version for x2
+//      // easier to read (dense) version for x2
 //      double x2 = 0;
 //      for (int f=0; f<numFeatures(); f++){
-//        x2 += Gamma.logGamma(this.countOfXAndF[i][f] + 1);
+//        x2 += Gamma.logGamma(x.get(i).get(f) + 1);
 //      }
       // harder to read (sparse) version for x2
       final double[] x2 = new double[]{0}; // this is an array only so it can be final AND mutable
@@ -521,11 +646,10 @@ public class MeanFieldMomRespModel extends AbstractMeanFieldMultiAnnModel {
           x2[0] += Gamma.logGamma(value + 1);
         }
       });
-      
       t1xterm += x1 - x2[0];
     }
     
-    double term1 = t1thetaterm + t1gammaterm + t1phiterm - t1thetanorm - t1gammanorm - t1phinorm + t1aterm + t1xterm;
+    double term1 = t1thetaterm + t1muterm + t1gammaterm + t1phiterm - t1thetanorm - t1munorm - t1gammanorm - t1phinorm + t1aterm + t1xterm;
 
     // *********
     // term 2
@@ -541,6 +665,23 @@ public class MeanFieldMomRespModel extends AbstractMeanFieldMultiAnnModel {
       double theta2 = digammaOfPis[k] - digammaOfSummedPis;
       
       t2thetaterm += theta1 * theta2;
+    }
+    
+    // term 2 - mu normalizer
+    double t2munorm = 0;
+    for (int k=0; k<numClasses(); k++){
+      t2munorm += GammaFunctions.logBeta(vars.tau[k]);
+    }
+    
+    // term 2 - mu
+    double t2muterm = 0;
+    for (int k=0; k<numClasses(); k++){
+      for (int k2=0; k2<numClasses(); k2++){
+        double mu1 = vars.tau[k][k2] - 1;
+        double mu2 = digammaOfTaus[k][k2] - digammaOfSummedTaus[k];
+        
+        t2muterm += mu1 * mu2;
+      }
     }
     
     // term 2 - gamma normalizer
@@ -583,24 +724,32 @@ public class MeanFieldMomRespModel extends AbstractMeanFieldMultiAnnModel {
     
     // term 2 - g and h
     double t2gterm = 0;
+    double t2hterm = 0;
     for (int i=0; i<numInstances(); i++){
       double gterm = 0;
       for (int k=0; k<numClasses(); k++){
         gterm += g[i][k] * vars.logg[i][k];
       }
       
+      double hterm = 0;
+      for (int k=0; k<numClasses(); k++){
+        hterm += h[i][k] * vars.logh[i][k];
+      }
+      
       t2gterm += gterm;
+      t2hterm += hterm;
     }
     
-    double term2 = t2thetaterm + t2gammaterm + t2phiterm + t2gterm - t2thetanorm - t2gammanorm - t2phinorm;
-    
+    double term2 = t2thetaterm + t2muterm + t2gammaterm + t2phiterm + t2gterm + t2hterm - t2thetanorm - t2gammanorm - t2munorm - t2phinorm;
+
     // debugging the validity of the variational bound
     double div1 = (t2thetaterm + t2gterm - t2thetanorm) - (t1thetaterm - t1thetanorm);
     double div2 = (t2gammaterm - t2gammanorm) - (t1gammaterm - t1gammanorm);
     double div3 = (t2phiterm - t2phinorm) - (t1phiterm - t1phinorm);
-    if (div1<0 || div2<0 || div3<0){
+    double div4 = (t2muterm + t2hterm - t2munorm) - (t1muterm - t1munorm);
+    if (div1<0 || div2<0 || div3<0 || div4<0){
       throw new RuntimeException("invalid variational bound. All divergences should be non-negative, but "
-          + "divergence1="+div1+" divergence2="+div2+" divergence3="+div3);
+          + "divergence1="+div1+" divergence2="+div2+" divergence3="+div3+" divergence4="+div4);
     }
     
     // ********
@@ -610,6 +759,42 @@ public class MeanFieldMomRespModel extends AbstractMeanFieldMultiAnnModel {
   }
 
   
+
+  public static double[][][] digammasOfTensor(double[][][] orig){
+    double[][][] digammas = new double[orig.length][orig[0].length][orig[0][0].length];
+    for (int i=0; i<orig.length; i++){
+      digammas[i] = digammasOfMatrix(orig[i]);
+    }
+    return digammas;
+  }
+  public static double[][] digammasOfMatrix(double[][] orig){
+    double[][] digammas = new double[orig.length][orig[0].length];
+    for (int i=0; i<orig.length; i++){
+      digammas[i] = digammasOfArray(orig[i]);
+    }
+    return digammas;
+  }
+  public static double[] digammasOfArray(double[] orig){
+    double[] digammas = new double[orig.length];
+    for (int i=0; i<orig.length; i++){
+      digammas[i] = Dirichlet.digamma(orig[i]);
+    }
+    return digammas;
+  }
+  public static double digammaOfSummedArray(double[] orig){
+    return Dirichlet.digamma(DoubleArrays.sum(orig));
+  }
+  public static double[] digammasOfArraysSummedOverSecond(double[][] orig){
+    double[] summedArrays = Matrices.sumOverSecond(orig);
+    return digammasOfArray(summedArrays);
+  }
+  public static double[][] digammasOfArraysSummedOverLast(double[][][] orig){
+    double[][] summedArrays = new double[orig.length][orig[0].length];
+    for (int i=0; i<summedArrays.length; i++){
+      summedArrays[i] = digammasOfArraysSummedOverSecond(orig[i]);
+    }
+    return summedArrays;
+  }
 
   
   /** {@inheritDoc} */
@@ -670,6 +855,24 @@ public class MeanFieldMomRespModel extends AbstractMeanFieldMultiAnnModel {
 
   /** {@inheritDoc} */
   @Override
+  public IntArrayCounter getMarginalYs() {
+    throw new UnsupportedOperationException("not implemented");
+  }
+
+  /** {@inheritDoc} */
+  @Override
+  public IntArrayCounter getMarginalMs() {
+    throw new UnsupportedOperationException("not implemented");
+  }
+
+  /** {@inheritDoc} */
+  @Override
+  public MatrixAverager getMarginalYMs() {
+    throw new UnsupportedOperationException("not implemented");
+  }
+  
+  /** {@inheritDoc} */
+  @Override
   public void sample() {
     logger.warn("Sampling not available for variational model. Ignoring...");
   }
@@ -702,26 +905,6 @@ public class MeanFieldMomRespModel extends AbstractMeanFieldMultiAnnModel {
 
   /** {@inheritDoc} */
   @Override
-  public IntArrayCounter getMarginalMs() {
-    throw new UnsupportedOperationException("not implemented");
-  }
-
-
-  /** {@inheritDoc} */
-  @Override
-  public MatrixAverager getMarginalYMs() {
-    throw new UnsupportedOperationException("not implemented");
-  }
-
-  /** {@inheritDoc} */
-  @Override
-  public IntArrayCounter getMarginalYs() {
-    throw new UnsupportedOperationException("not implemented");
-  }
-
-
-  /** {@inheritDoc} */
-  @Override
   public DatasetLabeler getIntermediateLabeler() {
     final MultiAnnModel thisModel = this;
     return new DatasetLabeler() {
@@ -731,5 +914,7 @@ public class MeanFieldMomRespModel extends AbstractMeanFieldMultiAnnModel {
       }
     };
   }
+  
+
   
 }

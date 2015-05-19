@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package edu.byu.nlp.crowdsourcing.em;
+package edu.byu.nlp.crowdsourcing.models.em;
 
 import java.util.List;
 import java.util.Map;
@@ -46,7 +46,7 @@ import edu.byu.nlp.crowdsourcing.CrowdsourcingUtils;
 import edu.byu.nlp.crowdsourcing.ModelInitialization.AssignmentInitializer;
 import edu.byu.nlp.crowdsourcing.ModelInitialization.MatrixAssignmentInitializer;
 import edu.byu.nlp.crowdsourcing.PriorSpecification;
-import edu.byu.nlp.crowdsourcing.gibbs.BlockCollapsedMultiAnnModelMath;
+import edu.byu.nlp.crowdsourcing.models.gibbs.BlockCollapsedMultiAnnModelMath;
 import edu.byu.nlp.data.types.Dataset;
 import edu.byu.nlp.data.types.DatasetInstance;
 import edu.byu.nlp.dataset.Datasets;
