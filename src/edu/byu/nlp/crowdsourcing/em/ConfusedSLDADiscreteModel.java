@@ -550,17 +550,75 @@ public class ConfusedSLDADiscreteModel {
   } // end builder
 
 
+  public static MalletInterface getMallet(State s){
+    return (s.includeLexicalFeatures)? new LexicalizedCsldaMallet() : new BasicCsldaMallet();
+  }
+  
   /**
    * A class to handle translation back and forth from our representations 
    * to a form mallet can handle (for the log-linear calculations)
    */
-  private static class MalletInterface{
+  private interface MalletInterface{
+    void ensureDataAlphabet(int numTopics);
+    void ensureLabelAlphabet(int numLabels);
+    MaxEnt logisticRegressionFromTopicToClass(State s);
+    Instance instanceForTopicCounts(double[] topicCounts, Integer topicWithExtraCount, int docSize, double topicOffset, Integer classLabel);
+    double[] zbar(double[] topicCounts, double docSize, double priorBias);
+    double getEtaElement(int documentClass, int topic, State s);
+    double[] getEtaRow(int documentClass, State s);
+    double[][] getEta(State s);
+  }
+  private static class LexicalizedCsldaMallet implements MalletInterface{
+    @Override
+    public void ensureDataAlphabet(int numTopics) {
+      // TODO Auto-generated method stub
+      
+    }
+    @Override
+    public void ensureLabelAlphabet(int numLabels) {
+      // TODO Auto-generated method stub
+      
+    }
+    @Override
+    public MaxEnt logisticRegressionFromTopicToClass(State s) {
+      // TODO Auto-generated method stub
+      return null;
+    }
+    @Override
+    public Instance instanceForTopicCounts(double[] topicCounts,
+        Integer topicWithExtraCount, int docSize, double topicOffset,
+        Integer classLabel) {
+      // TODO Auto-generated method stub
+      return null;
+    }
+    @Override
+    public double[] zbar(double[] topicCounts, double docSize, double priorBias) {
+      // TODO Auto-generated method stub
+      return null;
+    }
+    @Override
+    public double getEtaElement(int documentClass, int topic, State s) {
+      // TODO Auto-generated method stub
+      return 0;
+    }
+    @Override
+    public double[] getEtaRow(int documentClass, State s) {
+      // TODO Auto-generated method stub
+      return null;
+    }
+    @Override
+    public double[][] getEta(State s) {
+      // TODO Auto-generated method stub
+      return null;
+    }
+    
+  }
+  private static class BasicCsldaMallet implements MalletInterface{
     private static Alphabet dataAlphabet;
     private static LabelAlphabet labelAlphabet;
     
-    private MalletInterface(){}
-    
-    private static void ensureDataAlphabet(int numTopics){
+    @Override
+    public void ensureDataAlphabet(int numTopics){
       // cache data alphabet
       if (dataAlphabet==null){
         Alphabet alphabet = new Alphabet(numTopics);
@@ -581,7 +639,8 @@ public class ConfusedSLDADiscreteModel {
       
     }
     
-    private static void ensureLabelAlphabet(int numLabels){
+    @Override
+    public void ensureLabelAlphabet(int numLabels){
       // cache data alphabet
       if (labelAlphabet==null){
         LabelAlphabet alphabet = new LabelAlphabet();
@@ -601,7 +660,8 @@ public class ConfusedSLDADiscreteModel {
       Preconditions.checkState(labelAlphabet.size()==numLabels);
     }
     
-    public static MaxEnt logisticRegressionFromTopicToClass(State s){
+    @Override
+    public MaxEnt logisticRegressionFromTopicToClass(State s){
       // cache alphabets
       ensureDataAlphabet(s.numTopics);
       ensureLabelAlphabet(s.numClasses);
@@ -632,7 +692,8 @@ public class ConfusedSLDADiscreteModel {
      * and subtracting an offset from the topic count vector (in this case, an alpha prior value), 
      * and normalizing by docSize
      */
-    public static Instance instanceForTopicCounts(double[] topicCounts, Integer topicWithExtraCount, int docSize, double topicOffset, Integer classLabel){
+    @Override
+    public Instance instanceForTopicCounts(double[] topicCounts, Integer topicWithExtraCount, int docSize, double topicOffset, Integer classLabel){
       // cache data alphabet
       ensureDataAlphabet(topicCounts.length);
       
@@ -658,13 +719,15 @@ public class ConfusedSLDADiscreteModel {
       return inst;
     }
 
-    public static double[] zbar(double[] topicCounts, double docSize, double priorBias){
+    @Override
+    public double[] zbar(double[] topicCounts, double docSize, double priorBias){
       double[] zbar = DoubleArrays.subtract(topicCounts, priorBias); // remove bias of priors added to counts
       DoubleArrays.divideToSelf(zbar, docSize); // account for word removed
       return DoubleArrays.extend(zbar, 1);
     }
 
-    public static double getEtaElement(int documentClass, int topic, State s) {
+    @Override
+    public double getEtaElement(int documentClass, int topic, State s) {
       int rowPos = documentClass*(s.numTopics+1);
       int pos = rowPos + topic;
       return s.maxent.getParameters()[pos];
@@ -676,7 +739,8 @@ public class ConfusedSLDADiscreteModel {
      * b
      * Note that topics are playing the role of features here
      */
-    public static double[] getEtaRow(int documentClass, State s) {
+    @Override
+    public double[] getEtaRow(int documentClass, State s) {
       int length = s.numTopics+1;
       double[] parameters = new double[length];
       int srcPos = documentClass*(length);
@@ -688,7 +752,8 @@ public class ConfusedSLDADiscreteModel {
      * Get the weights w from the underlying log-linear model as a double[class][feature].
      * The final entry of each row (i.e., w[class][numFeatures]) is the class bias weight.
      */
-    public static double[][] getEta(State s){
+    @Override
+    public double[][] getEta(State s){
       Preconditions.checkState(s.maxent.getNumParameters()==s.numClasses*s.numTopics+s.numClasses);
       Preconditions.checkState(s.maxent.getDefaultFeatureIndex()==s.numTopics);
       double[][] maxLambda = new double[s.numClasses][]; // +1 accounts for class bias term
@@ -759,7 +824,7 @@ public class ConfusedSLDADiscreteModel {
         // unannotated - these y's were ignored during inference 
         // since they are a deterministic function of the z's and 
         // eta. Calculate them now
-        Instance zbar = MalletInterface.instanceForTopicCounts(state.perDocumentCountOfTopic[index], null, state.docSizes[index], state.priors.getBTheta(), null);
+        Instance zbar = getMallet(state).instanceForTopicCounts(state.perDocumentCountOfTopic[index], null, state.docSizes[index], state.priors.getBTheta(), null);
         state.maxent.getClassificationScores(zbar, state.logisticClassScores);
         unlabeledPredictions.add(new BasicPrediction(DoubleArrays.argMax(state.logisticClassScores), inst));
       }
@@ -885,6 +950,7 @@ public class ConfusedSLDADiscreteModel {
    * the joint. Otherwise, samples. 
    */
   public static int updateZDoc(State s, int doc, RandomGenerator rnd){
+    MalletInterface mallet = getMallet(s);
     int numChanges = 0;
     int docsize = s.docSizes[doc];
     int documentClass = s.y[doc];
@@ -902,12 +968,12 @@ public class ConfusedSLDADiscreteModel {
       // precompute and cache metadata scores for each topic 
       // (they are invariant wrt words)
       for (int t=0; t<s.numTopics; t++){
-        double numerator = Math.exp(MalletInterface.getEtaElement(documentClass,t,s)/(s.docSizes[doc]));
+        double numerator = Math.exp(mallet.getEtaElement(documentClass,t,s)/(s.docSizes[doc]));
         // extend zbar with a bias term on the end always set to 1 (see MalletInterface.getParameters())
-        double[] zzbar = MalletInterface.zbar(s.perDocumentCountOfTopic[doc], s.docSizes[doc], s.priors.getBTheta()); 
+        double[] zzbar = mallet.zbar(s.perDocumentCountOfTopic[doc], s.docSizes[doc], s.priors.getBTheta()); 
         double denominator = 0;
         for (int c=0; c<s.numClasses; c++){
-          double dotprod = (MalletInterface.getEtaElement(c,t,s)/s.docSizes[doc]) + DoubleArrays.dotProduct(MalletInterface.getEtaRow(c,s),zzbar);
+          double dotprod = (mallet.getEtaElement(c,t,s)/s.docSizes[doc]) + DoubleArrays.dotProduct(mallet.getEtaRow(c,s),zzbar);
           denominator += Math.exp(dotprod / s.docSizes[doc]); 
         }
         
@@ -1040,7 +1106,7 @@ public class ConfusedSLDADiscreteModel {
     
     if (s.includeMetadataSupervision){
       // precompute for efficiency
-      Instance zbar = MalletInterface.instanceForTopicCounts(s.perDocumentCountOfTopic[doc], null, s.docSizes[doc], s.priors.getBTheta(), null);
+      Instance zbar = getMallet(s).instanceForTopicCounts(s.perDocumentCountOfTopic[doc], null, s.docSizes[doc], s.priors.getBTheta(), null);
       s.maxent.getClassificationScores(zbar, s.logisticClassScores);
       DoubleArrays.logToSelf(s.logisticClassScores);
     }
@@ -1092,7 +1158,7 @@ public class ConfusedSLDADiscreteModel {
       
       if (staticEtaParameters==null){
         // initialize the maxent model (don't know how to do this without going through training once)
-        s.maxent = MalletInterface.logisticRegressionFromTopicToClass(s);
+        s.maxent = getMallet(s).logisticRegressionFromTopicToClass(s);
         
         staticEtaParameters = new double[s.numClasses*(s.numTopics+1)];
         for (int k=0; k<s.numClasses; k++){
@@ -1110,7 +1176,7 @@ public class ConfusedSLDADiscreteModel {
     else{
       // retrain a maxent model between per-document topic vectors 
       // and class labels.
-      s.maxent = MalletInterface.logisticRegressionFromTopicToClass(s);
+      s.maxent = getMallet(s).logisticRegressionFromTopicToClass(s);
     }
   }
   
@@ -1138,10 +1204,11 @@ public class ConfusedSLDADiscreteModel {
     }
     
     // log-linear class label contribution p(y|z,b) 
+    MalletInterface mallet = getMallet(s);
     for (int doc=0; doc<s.numDocuments; doc++){
       if (s.docAnnotationCounts[doc]>0){ // optimization: ignore unannotated documents (they integrate out)
         // get prob of each class assignment
-        Instance inst = MalletInterface.instanceForTopicCounts(s.perDocumentCountOfTopic[doc], null, s.docSizes[doc], s.priors.getBTheta(), null);
+        Instance inst = mallet.instanceForTopicCounts(s.perDocumentCountOfTopic[doc], null, s.docSizes[doc], s.priors.getBTheta(), null);
         s.maxent.getClassificationScores(inst, s.logisticClassScores);
         // add log prob of current class assignment
         logTotal += Math.log(s.logisticClassScores[s.y[doc]]);
