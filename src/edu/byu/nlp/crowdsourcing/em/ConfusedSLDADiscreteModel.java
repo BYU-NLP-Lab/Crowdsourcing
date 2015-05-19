@@ -559,20 +559,37 @@ public class ConfusedSLDADiscreteModel {
    * to a form mallet can handle (for the log-linear calculations)
    */
   private interface MalletInterface{
-    void ensureDataAlphabet(int numTopics);
+    void ensureDataAlphabet(State s);
     void ensureLabelAlphabet(int numLabels);
     MaxEnt logisticRegressionFromTopicToClass(State s);
-    Instance instanceForTopicCounts(double[] topicCounts, Integer topicWithExtraCount, int docSize, double topicOffset, Integer classLabel);
+    Instance instanceForTopicCounts(State s, double[] topicCounts, Integer topicWithExtraCount, int docSize, double topicOffset, Integer classLabel);
     double[] zbar(double[] topicCounts, double docSize, double priorBias);
     double getEtaElement(int documentClass, int topic, State s);
     double[] getEtaRow(int documentClass, State s);
     double[][] getEta(State s);
   }
   private static class LexicalizedCsldaMallet implements MalletInterface{
+    private static Alphabet dataAlphabet;
+    private static LabelAlphabet labelAlphabet;
     @Override
-    public void ensureDataAlphabet(int numTopics) {
-      // TODO Auto-generated method stub
-      
+    public void ensureDataAlphabet(State s) {
+      // cache data alphabet
+      if (dataAlphabet==null){
+        Alphabet alphabet = new Alphabet(s.numTopics);
+        alphabet.startGrowth();
+        for (int t=0; t<s.numTopics; t++){
+          alphabet.lookupIndex(t, true);
+        }
+        alphabet.stopGrowth();
+        dataAlphabet = alphabet;
+
+        // sanity check - make sure we really create an identity mapping
+        Preconditions.checkState(dataAlphabet.size()==s.numTopics);
+        for (int i=0; i<s.numTopics; i++){
+          Preconditions.checkState(dataAlphabet.lookupIndex(i)==i);
+        }
+      }
+      Preconditions.checkState(dataAlphabet.size()==s.numTopics);
     }
     @Override
     public void ensureLabelAlphabet(int numLabels) {
@@ -585,7 +602,7 @@ public class ConfusedSLDADiscreteModel {
       return null;
     }
     @Override
-    public Instance instanceForTopicCounts(double[] topicCounts,
+    public Instance instanceForTopicCounts(State s, double[] topicCounts,
         Integer topicWithExtraCount, int docSize, double topicOffset,
         Integer classLabel) {
       // TODO Auto-generated method stub
@@ -618,25 +635,24 @@ public class ConfusedSLDADiscreteModel {
     private static LabelAlphabet labelAlphabet;
     
     @Override
-    public void ensureDataAlphabet(int numTopics){
+    public void ensureDataAlphabet(State s){
       // cache data alphabet
       if (dataAlphabet==null){
-        Alphabet alphabet = new Alphabet(numTopics);
+        Alphabet alphabet = new Alphabet(s.numTopics);
         alphabet.startGrowth();
-        for (int t=0; t<numTopics; t++){
+        for (int t=0; t<s.numTopics; t++){
           alphabet.lookupIndex(t, true);
         }
         alphabet.stopGrowth();
         dataAlphabet = alphabet;
 
         // sanity check - make sure we really create an identity mapping
-        Preconditions.checkState(dataAlphabet.size()==numTopics);
-        for (int i=0; i<numTopics; i++){
+        Preconditions.checkState(dataAlphabet.size()==s.numTopics);
+        for (int i=0; i<s.numTopics; i++){
           Preconditions.checkState(dataAlphabet.lookupIndex(i)==i);
         }
       }
-      Preconditions.checkState(dataAlphabet.size()==numTopics);
-      
+      Preconditions.checkState(dataAlphabet.size()==s.numTopics);
     }
     
     @Override
@@ -663,11 +679,11 @@ public class ConfusedSLDADiscreteModel {
     @Override
     public MaxEnt logisticRegressionFromTopicToClass(State s){
       // cache alphabets
-      ensureDataAlphabet(s.numTopics);
+      ensureDataAlphabet(s);
       ensureLabelAlphabet(s.numClasses);
       
       // create a training set by adding each instance with its features 
-      // equal to "zbar" (normalized topic vector) and it's label equal to the current y
+      // equal to "zbar" (normalized topic vector) and its label equal to the current y
       // 
       // note: (ideally we would add each instance k times, each with its weight according to the sampler distribution
       // --this would make our EM a little softer)
@@ -677,7 +693,7 @@ public class ConfusedSLDADiscreteModel {
         // integrate out of the model and we aren't sampling them.
         if (s.docAnnotationCounts[doc]>0){
           // note: do even softer-EM by maintaining distributions over topic vectors?
-          trainingSet.add(instanceForTopicCounts(s.perDocumentCountOfTopic[doc], null, s.docSizes[doc], s.priors.getBTheta(), s.y[doc]));
+          trainingSet.add(instanceForTopicCounts(s, s.perDocumentCountOfTopic[doc], null, s.docSizes[doc], s.priors.getBTheta(), s.y[doc]));
         }
       }
       
@@ -693,9 +709,9 @@ public class ConfusedSLDADiscreteModel {
      * and normalizing by docSize
      */
     @Override
-    public Instance instanceForTopicCounts(double[] topicCounts, Integer topicWithExtraCount, int docSize, double topicOffset, Integer classLabel){
+    public Instance instanceForTopicCounts(State s, double[] topicCounts, Integer topicWithExtraCount, int docSize, double topicOffset, Integer classLabel){
       // cache data alphabet
-      ensureDataAlphabet(topicCounts.length);
+      ensureDataAlphabet(s);
       
       // convert empirical topic vector to mallet feature vector
       int[] featureIndices = new int[topicCounts.length];
@@ -805,16 +821,16 @@ public class ConfusedSLDADiscreteModel {
     return predict(state, predictSingleLastSample, trainingInstances, heldoutInstances, rnd);
   }
 
-  public static Predictions predict(State state, boolean predictSingleLastSample, Dataset trainingInstances, Dataset heldoutInstances, RandomGenerator rnd){
+  public static Predictions predict(State s, boolean predictSingleLastSample, Dataset trainingInstances, Dataset heldoutInstances, RandomGenerator rnd){
     // em-derived labels
     List<Prediction> labeledPredictions = Lists.newArrayList();
     List<Prediction> unlabeledPredictions = Lists.newArrayList();
     // the clause (IntArrays.sum(state.yMarginals.values(0))==0) checks whether yMarginals has been initialized.  
     // This will be false when model parameters were set most recently via maximization, in which case we want to use raw y values. 
-    int[] inferredYValues = predictSingleLastSample || IntArrays.sum(state.yMarginals.values(0))==0? state.y: state.yMarginals.argmax();
-    for (DatasetInstance inst: state.data){
+    int[] inferredYValues = predictSingleLastSample || IntArrays.sum(s.yMarginals.values(0))==0? s.y: s.yMarginals.argmax();
+    for (DatasetInstance inst: s.data){
       
-      int index = state.instanceIndices.get(inst.getInfo().getSource());
+      int index = s.instanceIndices.get(inst.getInfo().getSource());
       
       if (inst.getInfo().getNumAnnotations()>0){
         // annotated
@@ -824,9 +840,9 @@ public class ConfusedSLDADiscreteModel {
         // unannotated - these y's were ignored during inference 
         // since they are a deterministic function of the z's and 
         // eta. Calculate them now
-        Instance zbar = getMallet(state).instanceForTopicCounts(state.perDocumentCountOfTopic[index], null, state.docSizes[index], state.priors.getBTheta(), null);
-        state.maxent.getClassificationScores(zbar, state.logisticClassScores);
-        unlabeledPredictions.add(new BasicPrediction(DoubleArrays.argMax(state.logisticClassScores), inst));
+        Instance zbar = getMallet(s).instanceForTopicCounts(s, s.perDocumentCountOfTopic[index], null, s.docSizes[index], s.priors.getBTheta(), null);
+        s.maxent.getClassificationScores(zbar, s.logisticClassScores);
+        unlabeledPredictions.add(new BasicPrediction(DoubleArrays.argMax(s.logisticClassScores), inst));
       }
     }
     
@@ -883,9 +899,9 @@ public class ConfusedSLDADiscreteModel {
 //      heldoutPredictions.add(new BasicPrediction(predictedLabel, inst));
 //    }
     
-    double logJoint = unnormalizedLogJoint(state);
-    double[] annotatorAccuracies = estimateAnnotatorAccuracies(state);
-    double[][][] annotatorConfusionMatrices = state.perAnnotatorCountOfYAndA;
+    double logJoint = unnormalizedLogJoint(s);
+    double[] annotatorAccuracies = estimateAnnotatorAccuracies(s);
+    double[][][] annotatorConfusionMatrices = s.perAnnotatorCountOfYAndA;
     double machineAccuracy = -1;
     double[][] machineConfusionMatrix = null;
     return new Predictions(labeledPredictions, unlabeledPredictions, heldoutPredictions, annotatorAccuracies, annotatorConfusionMatrices, machineAccuracy, machineConfusionMatrix, logJoint);
@@ -1106,7 +1122,7 @@ public class ConfusedSLDADiscreteModel {
     
     if (s.includeMetadataSupervision){
       // precompute for efficiency
-      Instance zbar = getMallet(s).instanceForTopicCounts(s.perDocumentCountOfTopic[doc], null, s.docSizes[doc], s.priors.getBTheta(), null);
+      Instance zbar = getMallet(s).instanceForTopicCounts(s, s.perDocumentCountOfTopic[doc], null, s.docSizes[doc], s.priors.getBTheta(), null);
       s.maxent.getClassificationScores(zbar, s.logisticClassScores);
       DoubleArrays.logToSelf(s.logisticClassScores);
     }
@@ -1208,7 +1224,7 @@ public class ConfusedSLDADiscreteModel {
     for (int doc=0; doc<s.numDocuments; doc++){
       if (s.docAnnotationCounts[doc]>0){ // optimization: ignore unannotated documents (they integrate out)
         // get prob of each class assignment
-        Instance inst = mallet.instanceForTopicCounts(s.perDocumentCountOfTopic[doc], null, s.docSizes[doc], s.priors.getBTheta(), null);
+        Instance inst = mallet.instanceForTopicCounts(s, s.perDocumentCountOfTopic[doc], null, s.docSizes[doc], s.priors.getBTheta(), null);
         s.maxent.getClassificationScores(inst, s.logisticClassScores);
         // add log prob of current class assignment
         logTotal += Math.log(s.logisticClassScores[s.y[doc]]);
