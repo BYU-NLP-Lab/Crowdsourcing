@@ -17,6 +17,7 @@ package edu.byu.nlp.crowdsourcing.em;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 
 import org.apache.commons.math3.random.RandomGenerator;
 import org.slf4j.Logger;
@@ -60,9 +61,11 @@ import edu.byu.nlp.stats.SymmetricDirichletMultinomialMatrixMAPOptimizable;
 import edu.byu.nlp.util.Counter;
 import edu.byu.nlp.util.Counters;
 import edu.byu.nlp.util.DoubleArrays;
+import edu.byu.nlp.util.Enumeration;
 import edu.byu.nlp.util.IntArrayCounter;
 import edu.byu.nlp.util.IntArrays;
 import edu.byu.nlp.util.Integers;
+import edu.byu.nlp.util.Iterables2;
 import edu.byu.nlp.util.Matrices;
 import edu.byu.nlp.util.Pair;
 
@@ -116,8 +119,8 @@ public class ConfusedSLDADiscreteModel {
     private int[][][] a; // annotations indexed by [document][annotator][annotation_value]
     private int[] docSizes; // N_d: num words in dth doc. Derived from data. 
     private int[] docAnnotationCounts; // number of annotations per doc. Derived from data
-    private int[][] documents;  // documents represented as sequences of type indices. 
-                                // indexed by [doc][word_position]. 
+    private int[][] documents;  // documents represented as sequences of type indices. indexed by [doc][word_position]. 
+    private List<Counter<Integer>> documentCounters;  // documents represented as counters of type indices. indexed by [doc].get(word_type). 
 
     // Sufficient statistics (these could be ints, but using double means less 
     // casting in the math down below; and allows us to pre-add prior values to save operations later)
@@ -163,6 +166,7 @@ public class ConfusedSLDADiscreteModel {
       this.docSizes = Datasets.countIntegerDocSizes(data);
       this.docAnnotationCounts = Datasets.countDocAnnotations(data);
       this.documents = Datasets.featureVectors2FeatureSequences(data);
+      this.documentCounters = computeDocumentCounters(this.documents);
       this.deltas = CrowdsourcingUtils.annotatorConfusionMatricesFromPrior(priors, numClasses);
       // sufficient statistics (derived from y,z)
       this.perDocumentCountOfTopic = new double[numDocuments][numTopics];
@@ -564,7 +568,7 @@ public class ConfusedSLDADiscreteModel {
     void ensureDataAlphabet(State s);
     void ensureLabelAlphabet(int numLabels);
     MaxEnt logisticRegressionFromTopicToClass(State s);
-    Instance instanceForTopicCounts(double[] topicCounts, Integer topicWithExtraCount, int docSize, double topicOffset, Integer classLabel, int[] features, State s);
+    Instance instanceForTopicCounts(double[] topicCounts, Integer topicWithExtraCount, int docSize, double topicOffset, Integer classLabel, Counter<Integer> featureCounts, State s);
     double[] zbar(double[] topicCounts, double docSize, double priorBias);
     double getEtaElement(int documentClass, int topic, State s);
     /** This should always return a vector wrt just topics, regardless of whether or not the LR is lexicalized */
@@ -634,7 +638,7 @@ public class ConfusedSLDADiscreteModel {
         // integrate out of the model and we aren't sampling them.
         if (s.docAnnotationCounts[doc]>0){
           // note: do even softer-EM by maintaining distributions over topic vectors?
-          trainingSet.add(instanceForTopicCounts(s.perDocumentCountOfTopic[doc], null, s.docSizes[doc], s.priors.getBTheta(), s.y[doc], s.documents[doc], s));
+          trainingSet.add(instanceForTopicCounts(s.perDocumentCountOfTopic[doc], null, s.docSizes[doc], s.priors.getBTheta(), s.y[doc], s.documentCounters.get(doc), s));
         }
       }
       
@@ -666,7 +670,7 @@ public class ConfusedSLDADiscreteModel {
     @Override
     public Instance instanceForTopicCounts(double[] topicCounts,
         Integer topicWithExtraCount, int docSize, double topicOffset,
-        Integer classLabel, int[] features, State s) {
+        Integer classLabel, Counter<Integer> featureCounts, State s) {
       
       // cache data alphabet
       ensureDataAlphabet(s);
@@ -681,10 +685,12 @@ public class ConfusedSLDADiscreteModel {
         featureValues[t] = (topicCounts[t] - topicOffset + extraCount)/docSize; 
       }
       // feature values
-      Counter<Integer> featureCounts = Counters.count(IntArrays.asList(features));
-      for (int f=0; f<s.numFeatures; f++){
-        featureIndices[f] = dataAlphabet.lookupIndex(s.numTopics+f, false);
-        featureValues[f] = featureCounts.getCount(f);
+      for (Enumeration<Entry<Integer, Integer>> e: Iterables2.enumerate(featureCounts.entrySet())){
+        int i=e.getIndex();
+        int wordType = e.getElement().getKey();
+        int wordCount = e.getElement().getValue();
+        featureIndices[i] = dataAlphabet.lookupIndex(s.numTopics+wordType, false);
+        featureValues[i] = wordCount;
       }
       FeatureVector fv = new FeatureVector(dataAlphabet, featureIndices, featureValues);
       
@@ -725,7 +731,7 @@ public class ConfusedSLDADiscreteModel {
      * and normalizing by docSize
      */
     @Override
-    public Instance instanceForTopicCounts(double[] topicCounts, Integer topicWithExtraCount, int docSize, double topicOffset, Integer classLabel, int[] features, State s){
+    public Instance instanceForTopicCounts(double[] topicCounts, Integer topicWithExtraCount, int docSize, double topicOffset, Integer classLabel, Counter<Integer> featureCounts, State s){
       // cache data alphabet
       ensureDataAlphabet(s);
       
@@ -827,7 +833,7 @@ public class ConfusedSLDADiscreteModel {
         // unannotated - these y's were ignored during inference 
         // since they are a deterministic function of the z's and 
         // eta. Calculate them now
-        Instance zbar = getMallet(s).instanceForTopicCounts(s.perDocumentCountOfTopic[index], null, s.docSizes[index], s.priors.getBTheta(), null, s.documents[index], s);
+        Instance zbar = getMallet(s).instanceForTopicCounts(s.perDocumentCountOfTopic[index], null, s.docSizes[index], s.priors.getBTheta(), null, s.documentCounters.get(index), s);
         s.maxent.getClassificationScores(zbar, s.logisticClassScores);
         unlabeledPredictions.add(new BasicPrediction(DoubleArrays.argMax(s.logisticClassScores), inst));
       }
@@ -1109,7 +1115,7 @@ public class ConfusedSLDADiscreteModel {
     
     if (s.includeMetadataSupervision){
       // precompute for efficiency
-      Instance zbar = getMallet(s).instanceForTopicCounts(s.perDocumentCountOfTopic[doc], null, s.docSizes[doc], s.priors.getBTheta(), null, s.documents[doc], s);
+      Instance zbar = getMallet(s).instanceForTopicCounts(s.perDocumentCountOfTopic[doc], null, s.docSizes[doc], s.priors.getBTheta(), null, s.documentCounters.get(doc), s);
       s.maxent.getClassificationScores(zbar, s.logisticClassScores);
       DoubleArrays.logToSelf(s.logisticClassScores);
     }
@@ -1211,7 +1217,7 @@ public class ConfusedSLDADiscreteModel {
     for (int doc=0; doc<s.numDocuments; doc++){
       if (s.docAnnotationCounts[doc]>0){ // optimization: ignore unannotated documents (they integrate out)
         // get prob of each class assignment
-        Instance inst = mallet.instanceForTopicCounts(s.perDocumentCountOfTopic[doc], null, s.docSizes[doc], s.priors.getBTheta(), null, s.documents[doc], s);
+        Instance inst = mallet.instanceForTopicCounts(s.perDocumentCountOfTopic[doc], null, s.docSizes[doc], s.priors.getBTheta(), null, s.documentCounters.get(doc), s);
         s.maxent.getClassificationScores(inst, s.logisticClassScores);
         // add log prob of current class assignment
         logTotal += Math.log(s.logisticClassScores[s.y[doc]]);
@@ -1301,4 +1307,11 @@ public class ConfusedSLDADiscreteModel {
   }
   
   
+  public static List<Counter<Integer>> computeDocumentCounters(int[][] documents){
+    List<Counter<Integer>> retval = Lists.newArrayList();
+    for (int[] doc: documents){
+      retval.add(Counters.count(IntArrays.asList(doc)));
+    }
+    return retval;
+  }
 }
