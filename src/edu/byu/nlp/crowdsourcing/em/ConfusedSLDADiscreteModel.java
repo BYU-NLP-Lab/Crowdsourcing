@@ -57,6 +57,8 @@ import edu.byu.nlp.math.optimize.ValueAndObject;
 import edu.byu.nlp.stats.RandomGenerators;
 import edu.byu.nlp.stats.SymmetricDirichletMultinomialDiagonalMatrixMAPOptimizable;
 import edu.byu.nlp.stats.SymmetricDirichletMultinomialMatrixMAPOptimizable;
+import edu.byu.nlp.util.Counter;
+import edu.byu.nlp.util.Counters;
 import edu.byu.nlp.util.DoubleArrays;
 import edu.byu.nlp.util.IntArrayCounter;
 import edu.byu.nlp.util.IntArrays;
@@ -679,9 +681,10 @@ public class ConfusedSLDADiscreteModel {
         featureValues[t] = (topicCounts[t] - topicOffset + extraCount)/docSize; 
       }
       // feature values
-      for (int f=s.numTopics; f<s.numTopics+s.numFeatures; f++){
-        featureIndices[f] = dataAlphabet.lookupIndex(f, false);
-        featureValues[f] = features[f-s.numTopics];
+      Counter<Integer> featureCounts = Counters.count(IntArrays.asList(features));
+      for (int f=0; f<s.numFeatures; f++){
+        featureIndices[f] = dataAlphabet.lookupIndex(s.numTopics+f, false);
+        featureValues[f] = featureCounts.getCount(f);
       }
       FeatureVector fv = new FeatureVector(dataAlphabet, featureIndices, featureValues);
       
