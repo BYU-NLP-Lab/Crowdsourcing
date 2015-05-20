@@ -26,10 +26,10 @@ import edu.byu.nlp.data.types.Dataset;
  */
 public class FullyDiscriminativeCrowdsourcingModelLabeler implements DatasetLabeler{
 
-  private LogRespModel model;
+  private FullyDiscriminativeCrowdsourcingModel model;
 
   public FullyDiscriminativeCrowdsourcingModelLabeler(Dataset data, PriorSpecification priors, boolean semisupervised){
-    this.model = new LogRespModel.ModelBuilder(data, priors, semisupervised).build();
+    this.model = new FullyDiscriminativeCrowdsourcingModel.ModelBuilder(data, priors, semisupervised).build();
   }
   
   /** {@inheritDoc} */

@@ -136,8 +136,7 @@ public class LogRespModel {
       }
       
       // EM training
-      double previousValue = Double.MIN_VALUE;
-      double value = Double.MIN_VALUE;
+      double previousValue = -Double.MAX_VALUE, value = -Double.MAX_VALUE;
       int iterations = 0;
       do{
         //////////////////

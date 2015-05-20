@@ -21,14 +21,18 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import cc.mallet.classify.MaxEnt;
+import cc.mallet.classify.MaxEntTrainer;
 import cc.mallet.types.Alphabet;
+import cc.mallet.types.FeatureVector;
 import cc.mallet.types.Instance;
+import cc.mallet.types.InstanceList;
+import cc.mallet.types.Label;
 import cc.mallet.types.LabelAlphabet;
 import cc.mallet.types.LabelVector;
 
+import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
 
-import edu.byu.nlp.classify.MalletMaxentTrainer;
 import edu.byu.nlp.classify.eval.BasicPrediction;
 import edu.byu.nlp.classify.eval.Prediction;
 import edu.byu.nlp.classify.eval.Predictions;
@@ -36,10 +40,14 @@ import edu.byu.nlp.crowdsourcing.CrowdsourcingUtils;
 import edu.byu.nlp.crowdsourcing.PriorSpecification;
 import edu.byu.nlp.data.types.Dataset;
 import edu.byu.nlp.data.types.DatasetInstance;
+import edu.byu.nlp.data.types.SparseFeatureVector;
+import edu.byu.nlp.data.types.SparseFeatureVector.EntryVisitor;
 import edu.byu.nlp.dataset.Datasets;
-import edu.byu.nlp.math.Math2;
+import edu.byu.nlp.math.AbstractRealMatrixPreservingVisitor;
 import edu.byu.nlp.util.DoubleArrays;
+import edu.byu.nlp.util.Enumeration;
 import edu.byu.nlp.util.IntArrays;
+import edu.byu.nlp.util.Iterables2;
 import edu.byu.nlp.util.Matrices;
 
 /**
@@ -116,7 +124,7 @@ public class FullyDiscriminativeCrowdsourcingModel {
       logger.info("Initializing EM (training model on majority vote labels)");
       double[][] softlabels = majorityVoteSoftLabels();
 
-      MalletMaxentTrainer trainer = MalletMaxentTrainer.build(data);
+      DataAndAnnotationFeatureMalletMaxentTrainer trainer = DataAndAnnotationFeatureMalletMaxentTrainer.build(data);
       maxent = trainer.maxDataModel(softlabels, maxent);
       
       // convert the dataset to mallet
@@ -126,15 +134,14 @@ public class FullyDiscriminativeCrowdsourcingModel {
       int index=0;
       for (DatasetInstance inst: data){
         // convert feature vector
-        instances[index] = MalletMaxentTrainer.convert(maxent.getAlphabet(), inst);
+        instances[index] = DataAndAnnotationFeatureMalletMaxentTrainer.convert(maxent.getAlphabet(), inst);
         // remember the original instance
         externalInstances.add(inst);
         index++;
       }
       
       // EM training
-      double previousValue = Double.MIN_VALUE;
-      double value = Double.MIN_VALUE;
+      double previousValue = -Double.MAX_VALUE, value = -Double.MAX_VALUE;
       int iterations = 0;
       do{
         //////////////////
@@ -179,37 +186,13 @@ public class FullyDiscriminativeCrowdsourcingModel {
       double softlabels[][] = new double[instances.length][labelAlphabet.size()];
       for (int i=0; i<instances.length; i++){
         double[] dataEvidence = maxent.classify(instances[i]).getLabelVector().getValues();
-        for (int k=0; k<maxent.getLabelAlphabet().size(); k++){
+        for (int k=0; k<dataEvidence.length; k++){
           // p(y|x) 
           softlabels[i][k] = dataEvidence[k]; 
         }
         DoubleArrays.normalizeToSelf(softlabels[i]);
       }
       return softlabels;
-    }
-
-    private static double[][][] maxGammas(double[][] softlabels, int[][][] a, int numAnnotators, int numLabels, PriorSpecification priors) {
-      double[][][] gammas = new double[numAnnotators][numLabels][numLabels];
-      // add priors
-      for (int j=0; j<numAnnotators; j++){
-        CrowdsourcingUtils.initializeConfusionMatrixWithPrior(gammas[j], priors.getBGamma(), priors.getCGamma());
-      }
-      
-      for (int j=0; j<numAnnotators; j++){
-        // aggregate all the labels this annotator annotated
-        for (int i=0; i<a.length; i++){
-          for (int k=0; k<numLabels; k++){
-            for (int kprime=0; kprime<numLabels; kprime++){
-              if (!Double.isNaN(softlabels[i][k])){ // ignore nans (instances with no annotations)
-                gammas[j][k][kprime] += softlabels[i][k] * a[i][j][kprime];
-              }
-            }
-          }
-        }
-        // normalize
-        Matrices.normalizeRowsToSelf(gammas[j]);
-      }
-      return gammas;
     }
 
   }
@@ -232,7 +215,7 @@ public class FullyDiscriminativeCrowdsourcingModel {
   }
   
   private static List<Integer> unannotatedPrediction(DatasetInstance inst, Alphabet dataAlphabet, LabelAlphabet targetAlphabet, MaxEnt maxent){
-    Instance convertedTestInstances = MalletMaxentTrainer.convert(dataAlphabet, inst);
+    Instance convertedTestInstances = DataAndAnnotationFeatureMalletMaxentTrainer.convert(dataAlphabet, inst);
     double[] testSoftLabels = ModelBuilder.expectedSoftLabels(maxent, null, new Instance[]{convertedTestInstances},true)[0];
     return softLabels2ExternalPredictions(testSoftLabels, targetAlphabet);
   }
@@ -263,10 +246,12 @@ public class FullyDiscriminativeCrowdsourcingModel {
       heldoutPredictions.add(new BasicPrediction(predictionIndices, inst));
     }
     
-    double[] annotatorAccuracies = null;
-    double[][][] annotatorConfusionMatrices = null;
+    int numAnnotators = a[0].length;
+    int numClasses = a[0][0].length;
+    double[] annotatorAccuracies = new double[numAnnotators];
+    double[][][] annotatorConfusionMatrices = new double[numAnnotators][numClasses][numClasses];
     double machineAccuracy = -1;
-    double[][] machineConfusionMatrix = null;
+    double[][] machineConfusionMatrix = new double[numClasses][numClasses];
     return new Predictions(labeledPredictions, unlabeledPredictions, heldoutPredictions, annotatorAccuracies, annotatorConfusionMatrices, machineAccuracy, machineConfusionMatrix, logJoint);
   }
   
@@ -292,5 +277,202 @@ public class FullyDiscriminativeCrowdsourcingModel {
     }
     return acc;
   }
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  /**
+   * This helper class is a copy of MalletMaxentTrainer altered so as to 
+   * operate on feature vectors composed not just of document features, but 
+   * also annotation features concatenated onto the end.
+   */
+  public static class DataAndAnnotationFeatureMalletMaxentTrainer{
 
+    private cc.mallet.types.Instance[] instances;
+    private Alphabet dataAlphabet;
+    private LabelAlphabet targetAlphabet;
+    private List<DatasetInstance> externalInstances;
+
+    private DataAndAnnotationFeatureMalletMaxentTrainer(){}
+    
+    /**
+     * The trainer takes care of converting the dataset into types that 
+     * mallet can work with. Labels are not converted here, but 
+     * are passed in separately during training.
+     */
+    public static DataAndAnnotationFeatureMalletMaxentTrainer build(Dataset data){
+
+      final DataAndAnnotationFeatureMalletMaxentTrainer trainer = new DataAndAnnotationFeatureMalletMaxentTrainer();
+      
+      trainer.externalInstances = Lists.newArrayListWithCapacity(data.getInfo().getNumDocuments());
+      trainer.instances = new cc.mallet.types.Instance[data.getInfo().getNumDocuments()];
+      trainer.dataAlphabet = new Alphabet();
+      trainer.dataAlphabet.startGrowth();
+      trainer.targetAlphabet = new LabelAlphabet();
+      trainer.targetAlphabet.startGrowth();
+      
+
+      // create identity mallet data feature alphabet (so that our label indices correspond exactly to theirs)
+      for (int f=0; f<data.getInfo().getNumFeatures(); f++){
+        trainer.dataAlphabet.lookupIndex(dataFeature(f),true);
+      }
+      // also add annotation features to data alphabet
+      for (int j=0; j<data.getInfo().getNumAnnotators(); j++){
+        for (int k=0; k<data.getInfo().getNumClasses(); k++){
+          trainer.dataAlphabet.lookupIndex(annotationFeature(j, k),true);
+        }
+      }
+      trainer.dataAlphabet.stopGrowth();
+      
+      // create identity mallet label alphabet (so that our label indices correspond exactly to theirs)
+      for (int l=0; l<data.getInfo().getNumClasses(); l++){
+        trainer.targetAlphabet.lookupLabel(l,true);
+      }
+      trainer.targetAlphabet.stopGrowth();
+      
+      // alphabet sanity check #1 (make sure mallet alphabets return identity mappings
+      Preconditions.checkState(trainer.dataAlphabet.size()==data.getInfo().getNumFeatures()+(data.getInfo().getNumAnnotators()*data.getInfo().getNumClasses()));
+      Preconditions.checkState(trainer.targetAlphabet.size()==data.getInfo().getNumClasses());
+      for (int f=0; f<data.getInfo().getNumFeatures(); f++){
+        Preconditions.checkState(trainer.dataAlphabet.lookupIndex(dataFeature(f))==f);
+        Preconditions.checkState(trainer.dataAlphabet.lookupObject(f).equals(dataFeature(f)));
+      }
+      for (int j=0; j<data.getInfo().getNumAnnotators(); j++){
+        for (int k=0; k<data.getInfo().getNumClasses(); k++){
+          int index = data.getInfo().getNumFeatures() + j*data.getInfo().getNumClasses() + k;
+          Preconditions.checkState(trainer.dataAlphabet.lookupIndex(annotationFeature(j,k))==index);
+          Preconditions.checkState(trainer.dataAlphabet.lookupObject(index).equals(annotationFeature(j,k)));
+        }
+      }
+      for (int f=0; f<trainer.targetAlphabet.size(); f++){
+        Preconditions.checkState(trainer.targetAlphabet.lookupIndex(f)==f);
+        Preconditions.checkState(trainer.targetAlphabet.lookupLabel(f).getIndex()==f);
+        Preconditions.checkState(trainer.targetAlphabet.lookupObject(f).equals(new Integer(f)));
+      }
+      
+      // alphabet sanity check #2 (make sure every instance in the data has valid mallet data and label alphabet entries) 
+      // this would only fail if our indexers were not working properly (there was a gap somewhere among 
+      // the existing indices)
+      for (DatasetInstance inst: data){
+        // visit the data (to make sure all features and labels were added correctly)
+        inst.asFeatureVector().visitSparseEntries(new EntryVisitor() {
+          @Override
+          public void visitEntry(int index, double value) {
+            Preconditions.checkState(trainer.dataAlphabet.lookupIndex(dataFeature(index),false)>=0);
+          }
+        });
+        if (inst.hasLabel()){ // ignore null label but use hidden labels to help ensure good alphabet coverage (no cheating here)
+          Preconditions.checkState(trainer.targetAlphabet.lookupIndex(inst.getLabel())>=0);
+        }
+      }
+      
+      // convert each dataset instance to a mallet instance 
+      for (Enumeration<DatasetInstance> item: Iterables2.enumerate(data)){
+        // convert feature vector
+        trainer.instances[item.getIndex()] = convert(trainer.dataAlphabet, item.getElement());
+        // remember the original instance
+        trainer.externalInstances.add(item.getElement());
+      }
+
+      return trainer;
+    }
+    
+    /**
+     * Train a log-linear model using the given soft labels (must match the 
+     * dataset this trainer was build on).
+     */
+    public MaxEnt maxDataModel(double[][] softlabels, MaxEnt previousModel){
+      // create a training set by adding each instance K times, each weighted by softlabels
+      InstanceList trainingSet = new InstanceList(dataAlphabet, targetAlphabet);
+      for (int i=0; i<instances.length; i++){
+        for (int k=0; k<targetAlphabet.size(); k++){
+          if (!Double.isNaN(softlabels[i][k])){ // ignore nans (instances with no annotations)
+            // give this instance label k with weight softlabels[k]
+            cc.mallet.types.Instance inst = instances[i].shallowCopy();
+            inst.setTarget(targetAlphabet.lookupLabel(k));
+            trainingSet.add(inst, softlabels[i][k]);
+          }
+        }
+      }
+      // train
+      return new MaxEntTrainer(previousModel).train(trainingSet);
+    }
+    
+    /**
+     * Convert a single DatasetInstance to a mallet instance with no label
+     * 
+     * This is similar to MalletMaxentTrainer.convert(). However, in addition to 
+     * porting an instance's feature vector over, this method additionally concatenates 
+     * a set of features corresponding to annotation counts for each annotator.
+     */
+    public static cc.mallet.types.Instance convert(final Alphabet dataAlphabet, DatasetInstance inst){
+      SparseFeatureVector features = inst.asFeatureVector();
+      String source = inst.getInfo().getSource();
+      
+      final List<Integer> featureIndices = Lists.newArrayList();
+      final List<Double> featureValues = Lists.newArrayList();
+      
+      // data features
+      features.visitSparseEntries(new EntryVisitor() {
+        @Override
+        public void visitEntry(int index, double value) {
+          int featureIndex = dataAlphabet.lookupIndex(dataFeature(index));
+          if (featureIndex>=0){ // ignore unknown features (for generalization)
+            featureIndices.add(dataAlphabet.lookupIndex(dataFeature(index)));
+            featureValues.add(value);
+          }
+        }
+      });
+      
+      // annotation features
+      inst.getAnnotations().getLabelAnnotations().walkInOptimizedOrder(new AbstractRealMatrixPreservingVisitor() {
+        @Override
+        public void visit(int annotator, int annotationValue, double count) {
+          featureIndices.add(dataAlphabet.lookupIndex(annotationFeature(annotator, annotationValue)));
+          featureValues.add(count);
+        }
+      });
+      
+      // add to trainingData
+      FeatureVector malletFV = new FeatureVector(dataAlphabet, IntArrays.fromList(featureIndices), DoubleArrays.fromList(featureValues));
+      String name = source;
+      Label target = null; // no label for now
+      
+      // only convert instances with non-null labels
+      return new cc.mallet.types.Instance(malletFV, target, name, source);
+    }
+
+    public static String annotationFeature(int annotator, int annotationValue){
+      return "ann="+annotator+" val="+annotationValue;
+    }
+
+    public static String dataFeature(int feature){
+      return "feat="+feature;
+    }
+    
+    
+  } // end of trainer
+  
+  
+  
+  
+  
+  
+  
 }
