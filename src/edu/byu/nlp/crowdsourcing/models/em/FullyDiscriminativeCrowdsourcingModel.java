@@ -56,6 +56,8 @@ import edu.byu.nlp.util.Matrices;
  */
 public class FullyDiscriminativeCrowdsourcingModel {
 
+  private static final double CONVERGENCE_THRESHOLD = 1e-6;
+  private static final int MAX_ITERATIONS = 30;
   private static final Logger logger = LoggerFactory.getLogger(FullyDiscriminativeCrowdsourcingModel.class);
   
   private MaxEnt maxent;
@@ -157,17 +159,17 @@ public class FullyDiscriminativeCrowdsourcingModel {
         maxent = trainer.maxDataModel(softlabels, maxent);
         
         previousValue = value;
-        value = logJoint(priors,softlabels,maxent,instances,a);
+        value = logJoint(softlabels,maxent,instances,a);
 
         logger.info(iterations+" EM value "+value+" (improvement of "+(value-previousValue)+")");
         iterations++;
       
-      } while(iterations < 100 && value - previousValue > 1e-6);
+      } while(iterations < MAX_ITERATIONS && value - previousValue > CONVERGENCE_THRESHOLD);
       
       return new FullyDiscriminativeCrowdsourcingModel(maxent, softlabels, instances, externalInstances, a, value);
     }
 
-    private static double logJoint(PriorSpecification priors, double[][] softlabels, MaxEnt maxent, Instance[] instances, int[][][] a) {
+    private static double logJoint(double[][] softlabels, MaxEnt maxent, Instance[] instances, int[][][] a) {
       double logJoint = 0;
       for (int i=0; i<instances.length; i++){
         LabelVector labels = maxent.classify(instances[i]).getLabelVector();
