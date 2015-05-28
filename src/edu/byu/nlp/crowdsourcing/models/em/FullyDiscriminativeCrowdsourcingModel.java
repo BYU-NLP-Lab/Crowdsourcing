@@ -56,7 +56,7 @@ import edu.byu.nlp.util.Matrices;
  */
 public class FullyDiscriminativeCrowdsourcingModel {
 
-  private static final double CONVERGENCE_THRESHOLD = 1e-6;
+  private static final double CONVERGENCE_THRESHOLD = 0.01;
   private static final int MAX_ITERATIONS = 30;
   private static final Logger logger = LoggerFactory.getLogger(FullyDiscriminativeCrowdsourcingModel.class);
   

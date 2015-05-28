@@ -48,6 +48,8 @@ import edu.byu.nlp.util.Matrices;
  */
 public class LogRespModel {
 
+  private static final double CONVERGENCE_THRESHOLD = 0.01;
+  private static final int MAX_ITERATIONS = 30;
   private static final Logger logger = LoggerFactory.getLogger(LogRespModel.class);
   
   private MaxEnt maxent;
@@ -158,7 +160,7 @@ public class LogRespModel {
         logger.info(iterations+" EM value "+value+" (improvement of "+(value-previousValue)+")");
         iterations++;
       
-      } while(iterations < 100 && value - previousValue > 1e-6);
+      } while(iterations < MAX_ITERATIONS && value - previousValue > CONVERGENCE_THRESHOLD);
       
       return new LogRespModel(maxent, gammas, softlabels, instances, externalInstances, a, value);
     }
