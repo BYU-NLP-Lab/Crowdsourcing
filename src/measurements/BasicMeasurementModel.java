@@ -18,81 +18,196 @@ package measurements;
 import java.util.Map;
 
 import org.apache.commons.math3.random.RandomGenerator;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import edu.byu.nlp.classify.data.DatasetLabeler;
+import edu.byu.nlp.classify.eval.Predictions;
 import edu.byu.nlp.crowdsourcing.PriorSpecification;
+import edu.byu.nlp.data.types.Dataset;
 import edu.byu.nlp.data.types.DatasetInstance;
-import edu.byu.nlp.util.IntArrayCounter;
 
 /**
  * @author plf1
  *
  */
 public class BasicMeasurementModel implements MeasurementModel{
+  private static final Logger logger = LoggerFactory.getLogger(BasicMeasurementModel.class);
+
+  private State state;  
+
+  
+  public BasicMeasurementModel(State state) {
+    this.state=state;
+  }
+  
 
   /** {@inheritDoc} */
   @Override
   public Double sample(String variableName, int iteration, String[] args) {
-    // TODO Auto-generated method stub
-    return null;
+    throw new IllegalStateException("Sampling not implemented for measurement models");
   }
 
+  
   /** {@inheritDoc} */
   @Override
   public Double maximize(String variableName, int iteration, String[] args) {
-    // TODO Auto-generated method stub
-    return null;
+    // ignore variables--we only do joint maximization in variational
+    if (!variableName.toLowerCase().equals("all")){
+      logger.warn("Ignoring request to maximize "+variableName+". Instead maximizing 'all'");
+    }
+    
+    // construct an updated state (without changing the old state yet)
+    State newstate = state.copy();
+    MeasurementModelCounts counts = MeasurementModelCounts.from(state);
+    fitNuTheta(newstate.getTheta(), counts);
+    fitNuSigma2(newstate.getSigma2(), counts);
+    fitLogNuY(newstate.getLogNuY(), counts);
+
+    
+    // swap in new state all at once
+    this.state = newstate;
+    
+    // optimize hyperparams
+    if (state.getPriors().getInlineHyperparamTuning()){
+      fitBTheta();
+      fitBSigma2();
+    }
+
+    return logJoint();
   }
 
-  /** {@inheritDoc} */
-  @Override
-  public DatasetLabeler getIntermediateLabeler() {
-    // TODO Auto-generated method stub
-    return null;
+
+
+
+  /* ************************************** */
+  /* ***** Parameter Optimization ********* */
+  /* ************************************** */
+
+  private void fitNuTheta(double[] nuTheta, MeasurementModelCounts counts) {
+    for (int c=0; c<state.getNumClasses(); c++){
+      // Dirichlet for each class
+      nuTheta[c] = 
+          state.getPriors().getBTheta() // symmetric class prior
+          + Math.exp(counts.getLogNuY(c)); // count
+    }
   }
 
-  /** {@inheritDoc} */
-  @Override
-  public State getCurrentState() {
-    // TODO Auto-generated method stub
-    return null;
+  
+  private void fitNuSigma2(double[][] nuSigma2, MeasurementModelCounts counts) {
+    for (int j=0; j<state.getNumAnnotators(); j++){
+      // each inverse gamma distributed sigma2_j has two variational parameters: shape (nuSigma2[j][0]) and scale (nuSigma2[j][1]).
+      // These variational posteriors parameters are influence by their corresponding prior hyperparameters 
+      // alpha (shoe-horned into priors.bgamma) and beta (priors.cgamma)
+      nuSigma2[j][0] = 
+          (state.getStaticCounts().getPerAnnotatorMeasurements()[j] / 2.0)
+          - state.getPriors().getBGamma();
+      nuSigma2[j][1] = 
+          state.getPriors().getCGamma()
+          ; // beta
+    }
+  }
+  
+  
+  private void fitLogNuY(double[][] nuY, MeasurementModelCounts counts) {
+    for (int i=0; i<state.getNumDocuments(); i++){
+    }
   }
 
-  /** {@inheritDoc} */
-  @Override
-  public Map<String, Integer> getInstanceIndices() {
-    // TODO Auto-generated method stub
-    return null;
-  }
 
-  /** {@inheritDoc} */
-  @Override
-  public IntArrayCounter getMarginalYs() {
-    // TODO Auto-generated method stub
-    return null;
-  }
-
-  /** {@inheritDoc} */
-  @Override
   public double logJoint() {
     // TODO Auto-generated method stub
     return 0;
   }
 
+  
+  public void empiricalFit(){
+//    // initialize logNuY with (smoothed?) empirical distribution
+//    for (int i=0; i<a.length; i++){
+//      // logNuY = empirical fit
+//      for (int j=0; j<a[i].length; j++){
+//        for (int k=0; k<a[i][j].length; k++){
+//          state.getLogNuY()[i][k] += a[i][j][k] + INITIALIZATION_SMOOTHING; 
+//        }
+//      }
+//      DoubleArrays.normalizeAndLogToSelf(vars.logg[i]);
+//    }
+//    
+//    // init params based on g and h
+//    fitPi(vars.pi);
+//    fitNu(vars.nu);
+//    
+//    // make sure both sets of parameter values match
+//    newvars.clonetoSelf(vars);
+  }
+
+  /* ************************************** */
+  /* **** Hyperparameter Optimization ***** */
+  /* ************************************** */
+  private void fitBSigma2() {
+    // TODO Auto-generated method stub
+    
+  }
+
+
+  private void fitBTheta() {
+    // TODO Auto-generated method stub
+    
+  }
+  
+
+  /* ************************************** */
+  /* ***** Model Output ******************* */
+  /* ************************************** */
+  /** {@inheritDoc} */
+  @Override
+  public DatasetLabeler getIntermediateLabeler() {
+    final MeasurementModel thisModel = this;
+    return new DatasetLabeler() {
+      @Override
+      public Predictions label(Dataset trainingInstances, Dataset heldoutInstances) {
+        return new MeasurementModelLabeler(thisModel).label(trainingInstances, heldoutInstances);
+      }
+    };
+  }
+  
+
+  /** {@inheritDoc} */
+  @Override
+  public State getCurrentState() {
+    return state;
+  }
+
+
+  /** {@inheritDoc} */
+  @Override
+  public Map<String, Integer> getInstanceIndices() {
+    return state.getInstanceIndices();
+  }
+
+  
   /** {@inheritDoc} */
   @Override
   public double[] fitOutOfCorpusInstance(DatasetInstance instance) {
-    return null; // not interesting for this model
+    return null; // NA for this model
   }
   
   
   
-  public static class Builder extends MeasurementModelBuilder{
+  public static class Builder extends AbstractMeasurementModelBuilder{
     /** {@inheritDoc} */
     @Override
-    protected MeasurementModel initializeModel(PriorSpecification priors, int[] y, RandomGenerator rnd) {
-      // TODO Auto-generated method stub
-      return null;
+    protected MeasurementModel initializeModel(PriorSpecification priors, Dataset data,
+        int[] y, StaticMeasurementModelCounts staticCounts, Map<String, Integer> instanceIndices, RandomGenerator rnd) {
+      MeasurementModel.State state = 
+          new MeasurementModel.State()
+            .setData(data)
+            .setPriors(priors)
+            .setInstanceIndices(instanceIndices)
+            .setStaticCounts(staticCounts)
+            ;
+      
+      return new BasicMeasurementModel(state);
     }
   }
 

@@ -37,16 +37,20 @@ import edu.byu.nlp.util.Iterables2;
  */
 public class MeasurementModelLabeler implements DatasetLabeler{
 
-  private MeasurementModelBuilder builder;
+  private AbstractMeasurementModelBuilder builder;
   private MeasurementModel model;
   private IntermediatePredictionLogger intermediatePredictionLogger;
   private String trainingOperations;
 
-  public MeasurementModelLabeler(MeasurementModelBuilder builder, String trainingOperations, IntermediatePredictionLogger intermediatePredictionLogger) {
+  public MeasurementModelLabeler(AbstractMeasurementModelBuilder builder, String trainingOperations, IntermediatePredictionLogger intermediatePredictionLogger) {
     this.builder=builder;
     this.trainingOperations=trainingOperations;
     this.intermediatePredictionLogger=intermediatePredictionLogger;
   }
+  public MeasurementModelLabeler(MeasurementModel model) {
+    this.model=model;
+  }
+  
   /** {@inheritDoc} */
   @Override
   public Predictions label(Dataset trainingInstances, Dataset heldoutInstances) {
@@ -116,7 +120,7 @@ public class MeasurementModelLabeler implements DatasetLabeler{
       DatasetInstance instance = entry.getElement();
       Integer index = entry.getIndex();
       
-      double[] probs = state.getY()[index];
+      double[] probs = state.getLogNuY()[index];
       predictions.add(new BasicPrediction(DoubleArrays.argMaxList(-1, probs), instance));
     }
     return predictions;
