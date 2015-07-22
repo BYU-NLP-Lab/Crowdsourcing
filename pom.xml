@@ -4,7 +4,7 @@
   <parent>
     <groupId>edu.byu.nlp</groupId>
     <artifactId>byunlp-maven-base</artifactId>
-    <version>1.0</version>
+    <version>1.1</version>
     <relativePath>../byunlp-maven-base</relativePath>
   </parent>
   <artifactId>statnlp-crowdsourcing</artifactId>
