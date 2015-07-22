@@ -463,8 +463,8 @@ public class BlockCollapsedMultiAnnModelMath {
             DatasetInstance instance = it.next();
             // prediction based on most recent sample
             Integer prediction = null;
-            if (instanceMap.containsKey(instance.getInfo().getSource())){
-              prediction = y[instanceMap.get(instance.getInfo().getSource())];
+            if (instanceMap.containsKey(instance.getInfo().getRawSource())){
+              prediction = y[instanceMap.get(instance.getInfo().getRawSource())];
             }
             return new BasicPrediction(prediction, instance);
           }

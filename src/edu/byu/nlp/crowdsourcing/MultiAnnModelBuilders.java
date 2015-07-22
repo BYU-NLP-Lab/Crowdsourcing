@@ -334,7 +334,7 @@ public class MultiAnnModelBuilders {
       Dataset labeledData = Datasets.divideInstancesWithObservedLabels(data).getFirst();
       Map<Integer,Integer> instanceLabels = Maps.newHashMap();
       for (DatasetInstance inst: labeledData){
-        instanceLabels.put(instanceIndices.get(inst.getInfo().getSource()), inst.getObservedLabel());
+        instanceLabels.put(instanceIndices.get(inst.getInfo().getRawSource()), inst.getObservedLabel());
       }
       
       // Alias for better readability

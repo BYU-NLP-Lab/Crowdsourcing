@@ -175,8 +175,8 @@ public class ModelInitialization {
       Predictions predictions = labeler.label(data, emptyData);
       for (Prediction pred : Iterables.concat(
           predictions.labeledPredictions(), predictions.unlabeledPredictions())) {
-        if (instanceIndices.containsKey(pred.getInstance().getInfo().getSource())){
-          int modelIndex = instanceIndices.get(pred.getInstance().getInfo().getSource());
+        if (instanceIndices.containsKey(pred.getInstance().getInfo().getRawSource())){
+          int modelIndex = instanceIndices.get(pred.getInstance().getInfo().getRawSource());
           assignments[modelIndex] = pred.getPredictedLabel();
         }
         else{
@@ -200,7 +200,7 @@ public class ModelInitialization {
 	}
 	@Override
 	public AssignmentInitializer getInitializerFor(final int docIndex) {
-		final String docSrc = instances.get(docIndex).getInfo().getSource();
+		final String docSrc = instances.get(docIndex).getInfo().getRawSource();
 		return new AssignmentInitializer() {
 			@Override
 			public void setData(Dataset data, Map<String, Integer> instanceIndices) {}
@@ -231,7 +231,7 @@ public class ModelInitialization {
 	@Override
 	public void initialize(int[] assignments) {
 		for (DatasetInstance inst: data){
-			String src = inst.getInfo().getSource();
+			String src = inst.getInfo().getRawSource();
 			SerializableCrowdsourcingDocumentState docState = serializedState.getDocument(src);
 			Integer index = instanceIndices.get(src);
 			if (docState!=null && index!=null){
@@ -257,7 +257,7 @@ public class ModelInitialization {
 	@Override
 	public void initialize(int[] assignments) {
 		for (DatasetInstance inst: data){
-			String src = inst.getInfo().getSource();
+			String src = inst.getInfo().getRawSource();
 			SerializableCrowdsourcingDocumentState docState = serializedState.getDocument(src);
 			int index = instanceIndices.get(src);
 			assignments[index] = docState.getM(); 
@@ -279,7 +279,7 @@ public class ModelInitialization {
     @Override
     public void initialize(int[] assignments) {
       for (DatasetInstance instance: Datasets.divideInstancesWithObservedLabels(data).getFirst()){
-        int index = instanceIndices.get(instance.getInfo().getSource());
+        int index = instanceIndices.get(instance.getInfo().getRawSource());
         assignments[index] = instance.getObservedLabel();
       }
     }

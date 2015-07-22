@@ -31,7 +31,7 @@ import edu.byu.nlp.crowdsourcing.TrainableMultiAnnModel;
 import edu.byu.nlp.data.docs.CountCutoffFeatureSelectorFactory;
 import edu.byu.nlp.data.docs.DocPipes;
 import edu.byu.nlp.data.docs.DocumentDatasetBuilder;
-import edu.byu.nlp.data.pipes.EmailHeaderStripper;
+import edu.byu.nlp.data.streams.EmailHeaderStripper;
 import edu.byu.nlp.data.types.Dataset;
 import edu.byu.nlp.data.types.DatasetInstance;
 import edu.byu.nlp.dataset.Datasets;

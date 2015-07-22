@@ -425,7 +425,7 @@ public class FullyDiscriminativeCrowdsourcingModel {
      */
     public static cc.mallet.types.Instance convert(final Alphabet dataAlphabet, DatasetInstance inst){
       SparseFeatureVector features = inst.asFeatureVector();
-      String source = inst.getInfo().getSource();
+      String source = inst.getInfo().getRawSource();
       
       final List<Integer> featureIndices = Lists.newArrayList();
       final List<Double> featureValues = Lists.newArrayList();

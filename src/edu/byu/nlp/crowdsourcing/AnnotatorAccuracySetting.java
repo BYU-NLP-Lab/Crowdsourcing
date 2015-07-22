@@ -149,8 +149,8 @@ public enum AnnotatorAccuracySetting {
   /**
    * A trivial identity indexer where id=index
    */
-  public Indexer<Long> getAnnotatorIdIndexer(){
-    return Indexers.indexerOfLongs(getNumAnnotators());
+  public Indexer<String> getAnnotatorIdIndexer(){
+    return Indexers.indexerOfStrings(getNumAnnotators());
   }
   
   private static double[] uniformAnnotatorRates(int numAnnotators){

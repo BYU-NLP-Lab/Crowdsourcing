@@ -144,7 +144,7 @@ public class SerializableCrowdsourcingState  {
   public static SerializableCrowdsourcingState of(MultiAnnModel model){
     int[] y = model.getCurrentState().getY();
     int[] m = model.getCurrentState().getM();
-    String[] docSources = Datasets.docSourcesIn(model.getCurrentState().getData());
+    String[] docSources = Datasets.docRawSourcesIn(model.getCurrentState().getData());
     int[][] z = null;
     return of(docSources, y, m, z);
   }
@@ -152,7 +152,7 @@ public class SerializableCrowdsourcingState  {
   public static SerializableCrowdsourcingState of(Predictions predictions){
 	  Map<String, SerializableCrowdsourcingDocumentState> perDocumentState = Maps.newHashMap();
 	  for (Prediction pred: predictions.allPredictions()){
-		  String src = pred.getInstance().getInfo().getSource();
+		  String src = pred.getInstance().getInfo().getRawSource();
 		  Integer y = pred.getPredictedLabel();
 		  Integer m = pred.getAlternativePredictedLabel();
 		  int[] z = pred.getPredictedWordTopics();
@@ -165,7 +165,7 @@ public class SerializableCrowdsourcingState  {
     int[] y = model.getY();
     int[] m = null;
     int[][] z = model.getZ();
-    String[] docSources = Datasets.docSourcesIn(model.getData());
+    String[] docSources = Datasets.docRawSourcesIn(model.getData());
     return of(docSources, y, m, z);
   }
 

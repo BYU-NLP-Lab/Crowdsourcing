@@ -33,17 +33,17 @@ public class SerializedLabelLabeler implements DatasetLabeler{
 		List<Prediction> heldoutPredictions = Lists.newArrayList();
 
 		for (DatasetInstance inst: trainingInstances){
-			Preconditions.checkArgument(serializedLabels.containsKey(inst.getInfo().getSource()),"serialized label is not available for instance "+inst.getInfo().getSource());
+			Preconditions.checkArgument(serializedLabels.containsKey(inst.getInfo().getRawSource()),"serialized label is not available for instance "+inst.getInfo().getSource());
 			if (inst.hasAnnotations()){
-				labeledPredictions.add(new BasicPrediction(serializedLabels.get(inst.getInfo().getSource()).getY(), inst));
+				labeledPredictions.add(new BasicPrediction(serializedLabels.get(inst.getInfo().getRawSource()).getY(), inst));
 			}
 			else{
-				unlabeledPredictions.add(new BasicPrediction(serializedLabels.get(inst.getInfo().getSource()).getY(), inst));
+				unlabeledPredictions.add(new BasicPrediction(serializedLabels.get(inst.getInfo().getRawSource()).getY(), inst));
 			}
 		}
 		for (DatasetInstance inst: heldoutInstances){
-			Preconditions.checkArgument(serializedLabels.containsKey(inst.getInfo().getSource()),"serialized label is not available for instance "+inst.getInfo().getSource());
-			heldoutPredictions.add(new BasicPrediction(serializedLabels.get(inst.getInfo().getSource()).getY(), inst));
+			Preconditions.checkArgument(serializedLabels.containsKey(inst.getInfo().getRawSource()),"serialized label is not available for instance "+inst.getInfo().getSource());
+			heldoutPredictions.add(new BasicPrediction(serializedLabels.get(inst.getInfo().getRawSource()).getY(), inst));
 		}
 
 		int numAnnotators = trainingInstances.getInfo().getNumAnnotators();

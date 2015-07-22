@@ -324,11 +324,11 @@ public class BlockCollapsedMultiAnnModelTest {
     int i=0;
     Map<String,Integer> indices = model.getInstanceIndices();
     for (DatasetInstance inst: data){
-      Assertions.assertThat(indices.get(inst.getInfo().getSource())).isEqualTo(i++);
+      Assertions.assertThat(indices.get(inst.getInfo().getRawSource())).isEqualTo(i++);
     }
     i=0;
     for (DatasetInstance inst: model.data){
-      Assertions.assertThat(indices.get(inst.getInfo().getSource())).isEqualTo(i++);
+      Assertions.assertThat(indices.get(inst.getInfo().getRawSource())).isEqualTo(i++);
     }
 
   }

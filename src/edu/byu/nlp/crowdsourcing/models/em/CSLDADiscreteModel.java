@@ -823,7 +823,7 @@ public class CSLDADiscreteModel {
     int[] inferredYValues = predictSingleLastSample || IntArrays.sum(s.yMarginals.values(0))==0? s.y: s.yMarginals.argmax();
     for (DatasetInstance inst: s.data){
       
-      int index = s.instanceIndices.get(inst.getInfo().getSource());
+      int index = s.instanceIndices.get(inst.getInfo().getRawSource());
       
       if (inst.getInfo().getNumAnnotations()>0){
         // annotated
