@@ -5,6 +5,7 @@ import java.util.Map;
 
 import edu.byu.nlp.classify.util.ModelTraining.SupportsTrainingOperations;
 import edu.byu.nlp.data.types.Dataset;
+import edu.byu.nlp.data.types.DatasetInstance;
 import edu.byu.nlp.util.IntArrayCounter;
 
 public interface MeasurementModel extends SupportsTrainingOperations{
@@ -16,11 +17,21 @@ public interface MeasurementModel extends SupportsTrainingOperations{
   IntArrayCounter getMarginalYs();
 
   double logJoint();
+
+  double[] fitOutOfCorpusInstance(DatasetInstance instance);
   
   
+  /**
+   * Although these values represent variational parameters, 
+   * I call them the same thing as the variables whose 
+   * distributions they parameterize. This helps avoid 
+   * the alphabet soup afflicting MeanFieldMultiAnnState. 
+   *
+   * @author plf1
+   */
   public interface State {
 
-    int[] getY();
+    double[][] getY();
     
     Map<String,Integer> getInstanceIndices();
 
@@ -32,9 +43,9 @@ public interface MeasurementModel extends SupportsTrainingOperations{
 
     double[][] getMeanLogPhi();
 
-    double[][][] getGamma();
+    double[][] getSigma2();
     
-    double[][][] getMeanGamma();
+    double[][] getMeanSigma2();
 
     Dataset getData();
     
@@ -44,9 +55,5 @@ public interface MeasurementModel extends SupportsTrainingOperations{
 
     public void longDescription(PrintWriter serializeOut);
   }
-  
-  public interface Priors{
-    
-  }
-  
+
 }

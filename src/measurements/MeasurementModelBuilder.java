@@ -1,23 +1,19 @@
 package measurements;
 
-import java.util.Arrays;
-
-import measurements.MeasurementModel.Priors;
-
 import org.apache.commons.math3.random.RandomGenerator;
 
 import edu.byu.nlp.crowdsourcing.ModelInitialization.AssignmentInitializer;
-import edu.byu.nlp.util.DoubleArrays;
+import edu.byu.nlp.crowdsourcing.PriorSpecification;
 
 public abstract class MeasurementModelBuilder {
 
-  private Priors priors;
+  private PriorSpecification priors;
   private RandomGenerator rnd;
   private AssignmentInitializer yInitializer;
 
   public MeasurementModelBuilder(){  }
   
-  public MeasurementModelBuilder setPriors(MeasurementModel.Priors priors){
+  public MeasurementModelBuilder setPriors(PriorSpecification priors){
     this.priors=priors;
     return this;
   }
@@ -33,12 +29,19 @@ public abstract class MeasurementModelBuilder {
   }
   
   public MeasurementModel build(){
+    // TODO: pre-compute data stats used by measurement models
     int[] y = null;
     return initializeModel(priors, y, rnd);
   }
   
-  protected abstract MeasurementModel initializeModel(MeasurementModel.Priors priors, int[] y, RandomGenerator rnd);
+  protected abstract MeasurementModel initializeModel(PriorSpecification priors, int[] y, RandomGenerator rnd);
   
   
+  public static MeasurementModelBuilder initializeBuilder(MeasurementModelBuilder builder, PriorSpecification priors, AssignmentInitializer yInitializer, RandomGenerator rnd){
+    return builder
+        .setPriors(priors)
+        .setRnd(rnd)
+        .setYInitializer(yInitializer);
+  }
   
 }
