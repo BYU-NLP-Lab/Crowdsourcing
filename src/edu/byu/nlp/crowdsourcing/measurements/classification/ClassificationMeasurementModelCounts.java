@@ -13,28 +13,27 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package measurements;
+package edu.byu.nlp.crowdsourcing.measurements.classification;
 
 import java.util.List;
 
-import measurements.MeasurementModel.State;
-
 import com.google.common.collect.Lists;
 
+import edu.byu.nlp.crowdsourcing.measurements.classification.ClassificationMeasurementModel.State;
 import edu.byu.nlp.stats.MutableSum;
 
 /**
  * @author plf1
  *
  */
-public class MeasurementModelCounts {
+public class ClassificationMeasurementModelCounts {
 
   private List<MutableSum> logNuYSums;
   
-  private MeasurementModelCounts(){}
+  private ClassificationMeasurementModelCounts(){}
   
-  public static MeasurementModelCounts from(State state){
-    MeasurementModelCounts counts = new MeasurementModelCounts();
+  public static ClassificationMeasurementModelCounts from(State state){
+    ClassificationMeasurementModelCounts counts = new ClassificationMeasurementModelCounts();
     
     // initialize sums
     counts.logNuYSums = Lists.newArrayList();
@@ -61,8 +60,8 @@ public class MeasurementModelCounts {
   }
   
 
-  public MeasurementModelCounts copy() {
-    MeasurementModelCounts copy = new MeasurementModelCounts();
+  public ClassificationMeasurementModelCounts copy() {
+    ClassificationMeasurementModelCounts copy = new ClassificationMeasurementModelCounts();
     copy.logNuYSums = copySums(this.logNuYSums);
     return copy;
   }

@@ -1,18 +1,18 @@
-package measurements;
+package edu.byu.nlp.crowdsourcing.measurements.classification;
 
 import java.io.PrintWriter;
 import java.util.Map;
-
-import measurements.AbstractMeasurementModelBuilder.StaticMeasurementModelCounts;
 
 import com.google.gson.Gson;
 
 import edu.byu.nlp.classify.util.ModelTraining.SupportsTrainingOperations;
 import edu.byu.nlp.crowdsourcing.PriorSpecification;
+import edu.byu.nlp.crowdsourcing.measurements.AbstractMeasurementModelBuilder;
+import edu.byu.nlp.crowdsourcing.measurements.AbstractMeasurementModelBuilder.StaticMeasurementModelCounts;
 import edu.byu.nlp.data.types.Dataset;
 import edu.byu.nlp.data.types.DatasetInstance;
 
-public interface MeasurementModel extends SupportsTrainingOperations{
+public interface ClassificationMeasurementModel extends SupportsTrainingOperations{
 
   State getCurrentState();
   

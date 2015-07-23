@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package measurements;
+package edu.byu.nlp.crowdsourcing.measurements.classification;
 
 import java.util.List;
 
@@ -25,6 +25,7 @@ import edu.byu.nlp.classify.eval.Prediction;
 import edu.byu.nlp.classify.eval.Predictions;
 import edu.byu.nlp.classify.util.ModelTraining;
 import edu.byu.nlp.classify.util.ModelTraining.IntermediatePredictionLogger;
+import edu.byu.nlp.crowdsourcing.measurements.AbstractMeasurementModelBuilder;
 import edu.byu.nlp.data.types.Dataset;
 import edu.byu.nlp.data.types.DatasetInstance;
 import edu.byu.nlp.util.DoubleArrays;
@@ -35,19 +36,19 @@ import edu.byu.nlp.util.Iterables2;
  * @author plf1
  *
  */
-public class MeasurementModelLabeler implements DatasetLabeler{
+public class ClassificationMeasurementModelLabeler implements DatasetLabeler{
 
   private AbstractMeasurementModelBuilder builder;
-  private MeasurementModel model;
+  private ClassificationMeasurementModel model;
   private IntermediatePredictionLogger intermediatePredictionLogger;
   private String trainingOperations;
 
-  public MeasurementModelLabeler(AbstractMeasurementModelBuilder builder, String trainingOperations, IntermediatePredictionLogger intermediatePredictionLogger) {
+  public ClassificationMeasurementModelLabeler(AbstractMeasurementModelBuilder builder, String trainingOperations, IntermediatePredictionLogger intermediatePredictionLogger) {
     this.builder=builder;
     this.trainingOperations=trainingOperations;
     this.intermediatePredictionLogger=intermediatePredictionLogger;
   }
-  public MeasurementModelLabeler(MeasurementModel model) {
+  public ClassificationMeasurementModelLabeler(ClassificationMeasurementModel model) {
     this.model=model;
   }
   
@@ -60,7 +61,7 @@ public class MeasurementModelLabeler implements DatasetLabeler{
       ModelTraining.doOperations(trainingOperations, model, intermediatePredictionLogger);
     }
     
-    MeasurementModel.State state = model.getCurrentState();
+    ClassificationMeasurementModel.State state = model.getCurrentState();
     Dataset data = state.getData();
     
     // corpus predictions 
@@ -99,7 +100,7 @@ public class MeasurementModelLabeler implements DatasetLabeler{
 
   private List<Prediction> calculateGeneralizationPredictions(
       Dataset instances, int numFeatures,
-      int numLabels, MeasurementModel model) {
+      int numLabels, ClassificationMeasurementModel model) {
     List<Prediction> predictions = Lists.newArrayList();
     
     for (DatasetInstance instance: instances) {
@@ -113,7 +114,7 @@ public class MeasurementModelLabeler implements DatasetLabeler{
 
   private List<Prediction> calculateCorpusPredictions(
       Iterable<DatasetInstance> instances,
-      int numLabels, int size, MeasurementModel.State state) {
+      int numLabels, int size, ClassificationMeasurementModel.State state) {
 
     List<Prediction> predictions = Lists.newArrayList();
     for (Enumeration<DatasetInstance> entry : Iterables2.enumerate(instances)) {

@@ -1,10 +1,11 @@
-package measurements;
+package edu.byu.nlp.crowdsourcing.measurements;
 
 import java.util.Map;
 
 import org.apache.commons.math3.random.RandomGenerator;
 
 import edu.byu.nlp.crowdsourcing.ModelInitialization.AssignmentInitializer;
+import edu.byu.nlp.crowdsourcing.measurements.classification.ClassificationMeasurementModel;
 import edu.byu.nlp.crowdsourcing.PriorSpecification;
 import edu.byu.nlp.data.types.Dataset;
 import edu.byu.nlp.dataset.Datasets;
@@ -38,7 +39,7 @@ public abstract class AbstractMeasurementModelBuilder {
     return this;
   }
   
-  public MeasurementModel build(){
+  public ClassificationMeasurementModel build(){
     // TODO: pre-compute data stats used by measurement models
     StaticMeasurementModelCounts staticCounts = new StaticMeasurementModelCounts(data);
 
@@ -50,7 +51,7 @@ public abstract class AbstractMeasurementModelBuilder {
     return initializeModel(priors, data, y, staticCounts, instanceIndices, rnd);
   }
   
-  protected abstract MeasurementModel initializeModel(PriorSpecification priors, Dataset data, int[] y, StaticMeasurementModelCounts staticCounts, Map<String,Integer> instanceIndices, RandomGenerator rnd);
+  protected abstract ClassificationMeasurementModel initializeModel(PriorSpecification priors, Dataset data, int[] y, StaticMeasurementModelCounts staticCounts, Map<String,Integer> instanceIndices, RandomGenerator rnd);
   
   
   public static class StaticMeasurementModelCounts{
