@@ -36,6 +36,7 @@ import edu.byu.nlp.math.optimize.ConvergenceCheckers;
 import edu.byu.nlp.math.optimize.IterativeOptimizer;
 import edu.byu.nlp.math.optimize.IterativeOptimizer.ReturnType;
 import edu.byu.nlp.math.optimize.ValueAndObject;
+import edu.byu.nlp.stats.RandomGenerators;
 import edu.byu.nlp.stats.SymmetricDirichletMultinomialDiagonalMatrixMAPOptimizable;
 import edu.byu.nlp.stats.SymmetricDirichletMultinomialMatrixMAPOptimizable;
 import edu.byu.nlp.util.DoubleArrays;
@@ -139,6 +140,7 @@ public class MeanFieldItemRespModel extends AbstractMeanFieldMultiAnnModel {
       for (int j=0; j<a[i].length; j++){
         for (int k=0; k<a[i][j].length; k++){
           vars.logg[i][k] += a[i][j][k] + INITIALIZATION_SMOOTHING; 
+//          vars.logg[i][k] = rnd.nextDouble(); // test the effect of random initialization
         }
       }
       DoubleArrays.normalizeAndLogToSelf(vars.logg[i]);

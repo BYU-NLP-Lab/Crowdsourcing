@@ -15,12 +15,17 @@
  */
 package edu.byu.nlp.crowdsourcing.measurements.classification;
 
-import java.util.List;
+import java.util.Collection;
+import java.util.Map;
 
-import com.google.common.collect.Lists;
+import com.google.common.collect.ArrayListMultimap;
+import com.google.common.collect.Multimap;
 
+import edu.byu.nlp.crowdsourcing.measurements.MeasurementExpectation;
 import edu.byu.nlp.crowdsourcing.measurements.classification.ClassificationMeasurementModel.State;
-import edu.byu.nlp.stats.MutableSum;
+import edu.byu.nlp.data.types.Dataset;
+import edu.byu.nlp.data.types.DatasetInstance;
+import edu.byu.nlp.data.types.Measurement;
 
 /**
  * @author plf1
@@ -28,50 +33,53 @@ import edu.byu.nlp.stats.MutableSum;
  */
 public class ClassificationMeasurementModelCounts {
 
-  private List<MutableSum> logNuYSums;
-  
-  private ClassificationMeasurementModelCounts(){}
-  
-  public static ClassificationMeasurementModelCounts from(State state){
-    ClassificationMeasurementModelCounts counts = new ClassificationMeasurementModelCounts();
-    
-    // initialize sums
-    counts.logNuYSums = Lists.newArrayList();
-    for (int c=0; c<state.getNumClasses(); c++){
-      counts.logNuYSums.add(new MutableSum());
-    }
-    
-    // calculate initial state
-    for (int i=0; i<state.getLogNuY().length; i++){
-      counts.setLogNuY(i, state.getLogNuY()[i]);
-    }
-    
-    return counts;
-  }
-  
-  
-  public void setLogNuY(int i, double[] value){
-    for (int c=0; c<value.length; c++){
-      logNuYSums.get(c).setSummand(i, value[i]);
-    }
-  }
-  public double getLogNuY(int c){
-    return logNuYSums.get(c).getSum();
-  }
-  
+  private Map<Integer, Collection<MeasurementExpectation<Integer>>> measurementsForDocIndex;
+  private Map<Integer, Collection<MeasurementExpectation<Integer>>> measurementsForAnnotator;
 
-  public ClassificationMeasurementModelCounts copy() {
-    ClassificationMeasurementModelCounts copy = new ClassificationMeasurementModelCounts();
-    copy.logNuYSums = copySums(this.logNuYSums);
-    return copy;
+  private ClassificationMeasurementModelCounts() {
   }
-  
-  
-  private List<MutableSum> copySums(List<MutableSum> sums){
-    List<MutableSum> copy = Lists.newArrayList();
-    for (MutableSum sum: sums){
-      copy.add(sum.copy());
+
+  public static ClassificationMeasurementModelCounts from(State state) {
+    ClassificationMeasurementModelCounts updater = new ClassificationMeasurementModelCounts();
+    updater.initialize(state.getData(), state.getLogNuY());
+    return updater;
+  }
+
+  public void setLogNuY_i(int docIndex, double[] logNuY_i) {
+    for (MeasurementExpectation<Integer> expectation : measurementsForDocIndex.get(docIndex)) {
+      expectation.setLogNuY_i(docIndex, logNuY_i);
     }
-    return copy;
   }
+
+  public Collection<MeasurementExpectation<Integer>> getExpectationsForAnnotator(int annotator){
+    return measurementsForAnnotator.get(annotator);
+  }
+
+  public Collection<MeasurementExpectation<Integer>> getExpectationsForInstance(int docIndex){
+    return measurementsForDocIndex.get(docIndex);
+  }
+
+  public void initialize(Dataset dataset, double[][] logNuY) {
+
+    if (measurementsForDocIndex == null) {
+
+      // multimaps
+      Multimap<Integer, MeasurementExpectation<Integer>> perDocIndex = ArrayListMultimap.create();
+      Multimap<Integer, MeasurementExpectation<Integer>> perAnnotator = ArrayListMultimap.create();
+
+      // initialize each measurement expectation with the data (and index it for easy lookup)
+      for (DatasetInstance item : dataset) {
+        for (Measurement measurement : item.getAnnotations().getMeasurements()) {
+          MeasurementExpectation<Integer> expectation = ClassificationMeasurementExpectations.fromMeasurement(measurement, dataset, logNuY);
+          perDocIndex.put(item.getInfo().getSource(), expectation);
+          perAnnotator.put(measurement.getAnnotator(), expectation);
+        }
+      }
+
+      measurementsForDocIndex = perDocIndex.asMap();
+      measurementsForAnnotator = perAnnotator.asMap();
+    }
+
+  }
+
 }

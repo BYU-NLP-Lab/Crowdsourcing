@@ -21,14 +21,18 @@ import org.apache.commons.math3.random.RandomGenerator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import cc.mallet.types.Dirichlet;
 import edu.byu.nlp.classify.data.DatasetLabeler;
 import edu.byu.nlp.classify.eval.Predictions;
 import edu.byu.nlp.crowdsourcing.PriorSpecification;
 import edu.byu.nlp.crowdsourcing.measurements.AbstractMeasurementModelBuilder;
-import edu.byu.nlp.crowdsourcing.measurements.AbstractMeasurementModelBuilder.StaticMeasurementModelCounts;
-import edu.byu.nlp.crowdsourcing.measurements.classification.ClassificationMeasurementModel.State;
+import edu.byu.nlp.crowdsourcing.measurements.MeasurementExpectation;
+import edu.byu.nlp.crowdsourcing.models.meanfield.MeanFieldMultiRespModel;
+import edu.byu.nlp.data.measurements.ClassificationMeasurements.ClassificationAnnotationMeasurement;
 import edu.byu.nlp.data.types.Dataset;
 import edu.byu.nlp.data.types.DatasetInstance;
+import edu.byu.nlp.data.types.Measurement;
+import edu.byu.nlp.util.Matrices;
 
 /**
  * @author plf1
@@ -63,8 +67,8 @@ public class BasicClassificationMeasurementModel implements ClassificationMeasur
     // construct an updated state (without changing the old state yet)
     State newstate = state.copy();
     ClassificationMeasurementModelCounts counts = ClassificationMeasurementModelCounts.from(state);
-    fitNuTheta(newstate.getTheta(), counts);
-    fitNuSigma2(newstate.getSigma2(), counts);
+    fitNuTheta(newstate.getNuTheta(), counts);
+    fitNuSigma2(newstate.getNuSigma2(), counts);
     fitLogNuY(newstate.getLogNuY(), counts);
 
     
@@ -77,7 +81,7 @@ public class BasicClassificationMeasurementModel implements ClassificationMeasur
       fitBSigma2();
     }
 
-    return logJoint();
+    return lowerBound(counts);
   }
 
 
@@ -88,60 +92,128 @@ public class BasicClassificationMeasurementModel implements ClassificationMeasur
   /* ************************************** */
 
   private void fitNuTheta(double[] nuTheta, ClassificationMeasurementModelCounts counts) {
+    
+    double[] classCounts = Matrices.sumOverFirst(Matrices.exp(state.getLogNuY()));
+    
     for (int c=0; c<state.getNumClasses(); c++){
       // Dirichlet for each class
       nuTheta[c] = 
           state.getPriors().getBTheta() // symmetric class prior
-          + Math.exp(counts.getLogNuY(c)); // count
+          + classCounts[c]; // count
     }
   }
 
   
   private void fitNuSigma2(double[][] nuSigma2, ClassificationMeasurementModelCounts counts) {
+    // alpha is shoe-horned into priors.bgamma; beta into priors.cgamma
+    double alpha = state.getPriors().getBGamma(), beta = state.getPriors().getCGamma();
     for (int j=0; j<state.getNumAnnotators(); j++){
       // each inverse gamma distributed sigma2_j has two variational parameters: shape (nuSigma2[j][0]) and scale (nuSigma2[j][1]).
-      // These variational posteriors parameters are influence by their corresponding prior hyperparameters 
-      // alpha (shoe-horned into priors.bgamma) and beta (priors.cgamma)
-      nuSigma2[j][0] = 
-          (state.getStaticCounts().getPerAnnotatorMeasurements()[j] / 2.0)
-          - state.getPriors().getBGamma();
-      nuSigma2[j][1] = 
-          state.getPriors().getCGamma()
-          ; // beta
+
+      // variational posterior shape parameter
+      nuSigma2[j][0] = (state.getStaticCounts().getPerAnnotatorMeasurements().getCount(j) / 2.0) - alpha;
+      
+      // variational posterior scale parameter
+      double summedExpectationError = 0;
+      for (MeasurementExpectation<Integer> expectation: counts.getExpectationsForAnnotator(j)){
+        summedExpectationError += Math.pow(expectation.getMeasurement().getValue() - expectation.expectedValue(), 2);
+      }
+      nuSigma2[j][1] = beta + 0.5 * summedExpectationError; 
     }
   }
   
   
-  private void fitLogNuY(double[][] nuY, ClassificationMeasurementModelCounts counts) {
+  private void fitLogNuY(double[][] logNuY, ClassificationMeasurementModelCounts counts) {
+    // pre-calculate
+    double[] digammaOfNuThetas = MeanFieldMultiRespModel.digammasOfArray(state.getNuTheta());
+    double digammaOfSummedNuThetas = MeanFieldMultiRespModel.digammaOfSummedArray(state.getNuTheta());
+    double alpha = state.getPriors().getBGamma(), beta = state.getPriors().getCGamma();
+    
     for (int i=0; i<state.getNumDocuments(); i++){
+      for (int c=0; c<state.getNumClasses(); c++){
+        // part 1 (identical to first part of meanfielditemresp.fitg
+        double t1 = digammaOfNuThetas[c] - digammaOfSummedNuThetas;
+        
+        double t2 = 0;
+        for (int j=0; j<state.getNumAnnotators(); j++){
+          double t3 = 0;
+          for (MeasurementExpectation<Integer> expectation: counts.getExpectationsForAnnotator(j)){
+            t3 += Math.pow(expectation.getMeasurement().getValue() - expectation.expectedValue(), 2);
+          }
+          double t4 = beta/(alpha-1); // E[sigma2]
+          
+          t2 = beta + (0.5 * t3) / t4;
+        }
+         
+        logNuY[i][c] = t1 - t2;
+      }
     }
   }
 
 
-  public double logJoint() {
-    // TODO Auto-generated method stub
-    return 0;
+  public double lowerBound(ClassificationMeasurementModelCounts counts) {
+    double elbo = state.getStaticCounts().getLogLowerBoundConstant();
+    
+    // precalculate values
+    double[] digammaOfNuThetas = MeanFieldMultiRespModel.digammasOfArray(state.getNuTheta());
+    double digammaOfSummedNuThetas = MeanFieldMultiRespModel.digammaOfSummedArray(state.getNuTheta());
+    double[] classCounts = Matrices.sumOverFirst(Matrices.exp(state.getLogNuY()));
+    
+    // part 1
+    for (int c=0; c<state.getNumClasses(); c++){
+      double t1 = digammaOfNuThetas[c] - digammaOfSummedNuThetas;
+      double t2 = state.getPriors().getBTheta() + classCounts[c] - 1;
+      elbo += t1*t2;
+    }
+    
+    // part 2
+    double alpha = state.getPriors().getBGamma(), beta = state.getPriors().getCGamma(); // shoe-horned IG prior params
+    for (int j=0; j<state.getNumAnnotators(); j++){
+      // part 2a
+      double t1 = -( (state.getStaticCounts().getPerAnnotatorMeasurements().getCount(j) / 2.0) + alpha) - 1;
+      double t2 = Math.log(beta) - Dirichlet.digamma(alpha);
+      elbo += t1*t2;
+    
+      // part 2b
+      double t3 = 0;
+      for (MeasurementExpectation<Integer> expectation: counts.getExpectationsForAnnotator(j)){
+        t3 += Math.pow(expectation.getMeasurement().getValue() - expectation.expectedValue(), 2);
+      }
+      double t4 = beta/(alpha-1); // E[sigma2]
+      elbo += -(beta + (0.5 * t3) / t4);
+    }
+    
+    return elbo;
   }
 
   
+  /**
+   * Set the ys to a smoothed empirical fit derived by iterating over all 
+   * of the 'annotation' type measurements.
+   */
   public void empiricalFit(){
-//    // initialize logNuY with (smoothed?) empirical distribution
-//    for (int i=0; i<a.length; i++){
-//      // logNuY = empirical fit
-//      for (int j=0; j<a[i].length; j++){
-//        for (int k=0; k<a[i][j].length; k++){
-//          state.getLogNuY()[i][k] += a[i][j][k] + INITIALIZATION_SMOOTHING; 
-//        }
-//      }
-//      DoubleArrays.normalizeAndLogToSelf(vars.logg[i]);
-//    }
-//    
-//    // init params based on g and h
-//    fitPi(vars.pi);
-//    fitNu(vars.nu);
-//    
-//    // make sure both sets of parameter values match
-//    newvars.clonetoSelf(vars);
+    Dataset data = state.getData();
+    
+    // empirical 'annotation' distribution is derived by treating measurement values 
+    // as log values and normalizing. A lack of annotations is interpreted as a value 
+    // of log 1 = 0, so we are effectively doing add-1 smoothing on all counts.
+    // Interpreting values as log values allows us to use negative and positive values.
+    double[][] logNuY = new double[state.getNumDocuments()][state.getNumClasses()];
+    for (DatasetInstance instance: data){
+      for (Measurement measurement: instance.getAnnotations().getMeasurements()){
+        if (measurement instanceof ClassificationAnnotationMeasurement){
+          ClassificationAnnotationMeasurement annotation = (ClassificationAnnotationMeasurement) measurement;
+          logNuY[instance.getInfo().getSource()][annotation.getLabel()] += annotation.getValue();
+        }
+      }
+    }
+    Matrices.logNormalizeRowsToSelf(logNuY);
+    
+    // now set theta and sigma2 by fit
+    ClassificationMeasurementModelCounts counts = ClassificationMeasurementModelCounts.from(state);
+    fitNuTheta(state.getNuTheta(), counts );
+    fitNuSigma2(state.getNuSigma2(), counts);
+    
   }
 
   /* ************************************** */
@@ -200,8 +272,8 @@ public class BasicClassificationMeasurementModel implements ClassificationMeasur
   public static class Builder extends AbstractMeasurementModelBuilder{
     /** {@inheritDoc} */
     @Override
-    protected ClassificationMeasurementModel initializeModel(PriorSpecification priors, Dataset data,
-        int[] y, StaticMeasurementModelCounts staticCounts, Map<String, Integer> instanceIndices, RandomGenerator rnd) {
+    protected ClassificationMeasurementModel buildModel(PriorSpecification priors, Dataset data, int[] y,
+        StaticMeasurementModelCounts staticCounts, Map<String, Integer> instanceIndices, RandomGenerator rnd) {
       ClassificationMeasurementModel.State state = 
           new ClassificationMeasurementModel.State()
             .setData(data)
@@ -210,11 +282,14 @@ public class BasicClassificationMeasurementModel implements ClassificationMeasur
             .setStaticCounts(staticCounts)
             ;
       
-      return new BasicClassificationMeasurementModel(state);
+      // create model and initialize variational parameters with an empirical fit
+      BasicClassificationMeasurementModel model = new BasicClassificationMeasurementModel(state); 
+      model.empiricalFit();
+      
+      return model; 
     }
+
   }
-
-
 
 
 }

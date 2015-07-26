@@ -4,7 +4,7 @@ import static org.junit.Assert.assertEquals;
 
 import org.junit.Test;
 
-import edu.byu.nlp.data.measurements.ClassificationAnnotationMeasurement;
+import edu.byu.nlp.data.measurements.BasicClassificationAnnotationMeasurement;
 
 public class ClassificationAnnotationMeasurementTest {
 
@@ -17,7 +17,7 @@ public class ClassificationAnnotationMeasurementTest {
     int label = 1;
     double annotation = 0.9;
     double confidence = 0.8;
-    ClassificationAnnotationMeasurement m = new ClassificationAnnotationMeasurement(annotator, annotation, confidence, index, label);
+    BasicClassificationAnnotationMeasurement m = new BasicClassificationAnnotationMeasurement(annotator, annotation, confidence, index, label);
 
     for (int i=0; i<20; i++){
       for (int j=0; j<20; j++){

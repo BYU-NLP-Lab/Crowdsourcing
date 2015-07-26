@@ -4,9 +4,14 @@ import java.util.Set;
 
 import com.google.common.collect.Sets;
 
+import edu.byu.nlp.crowdsourcing.measurements.MeasurementExpectation;
+import edu.byu.nlp.data.measurements.ClassificationMeasurements.BasicClassificationLabelProportionMeasurement;
+import edu.byu.nlp.data.measurements.ClassificationMeasurements.ClassificationAnnotationMeasurement;
+import edu.byu.nlp.data.measurements.ClassificationMeasurements.ClassificationProportionMeasurement;
 import edu.byu.nlp.data.types.Dataset;
-import edu.byu.nlp.data.types.DatasetInstance;
 import edu.byu.nlp.data.types.Measurement;
+import edu.byu.nlp.stats.MutableSum;
+import edu.byu.nlp.util.IntArrays;
 
 /**
  * In the variation equations for the measurment model, 
@@ -28,71 +33,115 @@ import edu.byu.nlp.data.types.Measurement;
 public class ClassificationMeasurementExpectations {
 
   
-  public interface MeasurementExpectation{
-    Set<Integer> getDependentIndices(Dataset data);
-    void setLogNuY_i(int i, double[] logNuY);
-    double getValue();
-  }
-  
-  public static abstract class AbstractExpectation implements MeasurementExpectation{
+  public static abstract class AbstractExpectation implements MeasurementExpectation<Integer>{
     
-    private Measurement<Integer> measurement;
-  
-    public MeasurementExpectation(Measurement<Integer> measurement, double[][] logNuY){
+    private MutableSum expectation = new MutableSum();
+    private Measurement measurement;
+    private Dataset dataset;
+
+    public AbstractExpectation(Measurement measurement, Dataset dataset, double[][] logNuY){
       this.measurement=measurement;
+      this.dataset=dataset;
       for (int i=0; i<logNuY.length; i++){
         setLogNuY_i(i, logNuY[i]);
       }
     }
-    
     @Override
-    public Set<Integer> getDependentIndices(Dataset data){
-      Set<Integer> indices = Sets.newHashSet();
-      for (DatasetInstance item: data){
-        int index = item.getInfo().getSource();
-        for (int c=0; c<data.getInfo().getNumClasses(); c++){
-          // add all measurements that fire (pos or neg) for at least one class label
-          if (measurement.featureValue(index, c)!=0){
-            indices.add(index);
-            break;
-          }
-        }
-      }
-      return indices;
+    public Dataset getDataset() {
+      return dataset;
     }
-    
     @Override
-    public double getValue(){
+    public int getAnnotator() {
+      return measurement.getAnnotator();
     }
-    
-  }
-  
-  
-  public static class LabelProportion extends MeasurementExpectation{
-
     @Override
-    public double featureValue(int docIndex, Integer label) {
-      return (label==this.getLabel())? 1: 0;
-    }
-  }
-  
-  public static class Annotation extends MeasurementExpectation{
-
-    public Annotation(Measurement<Integer> measurement, double[][] logNuY) {
-      super(measurement, logNuY);
-      // TODO Auto-generated constructor stub
-    }
-
-    @Override
-    public void setLogNuY_i(int i, double[] logNuY) {
-      // TODO Auto-generated method stub
+    public void setLogNuY_i(int docIndex, double[] logNuY_i) {
+      expectation.setSummand(docIndex, expectedValue_i(docIndex, logNuY_i));
       
     }
     @Override
+    public double expectedValue() {
+      return expectation.getSum();
+    }
+    protected abstract double expectedValue_i(int docIndex, double[] logNuY_i);
+  }
+  
+  
+  
+  public static class LabelProportion extends AbstractExpectation{
+
+    private ClassificationProportionMeasurement measurement;
+
+    public LabelProportion(ClassificationProportionMeasurement measurement, Dataset dataset, double[][] logNuY) {
+      super((Measurement) measurement, dataset, logNuY);
+      this.measurement=measurement;
+    }
+    @Override
     public double featureValue(int docIndex, Integer label) {
-      return (docIndex==this.getIndex() && label==this.getLabel())? getAnnotation(): 0;
+      return (label==measurement.getLabel())? 1: 0;
+    }
+    @Override
+    protected double expectedValue_i(int docIndex, double[] logNuY_i) {
+      return Math.exp(logNuY_i[measurement.getLabel()]);
+    }
+    @Override
+    public Set<Integer> getDependentIndices() {
+      // all of them
+      return Sets.newHashSet(
+          IntArrays.asList(
+              IntArrays.sequence(0, getDataset().getInfo().getNumDocuments())));
+    }
+    @Override
+    public Measurement getMeasurement() {
+      return (Measurement) measurement;
     }
     
   }
+  
+  
+  
+  public static class Annotation extends AbstractExpectation{
 
+    private ClassificationAnnotationMeasurement measurement;
+    public Annotation(ClassificationAnnotationMeasurement measurement, Dataset dataset, double[][] logNuY) {
+      super((Measurement) measurement, dataset, logNuY);
+      this.measurement=measurement;
+    }
+    @Override
+    public double featureValue(int docIndex, Integer label) {
+      return (docIndex==this.measurement.getDocumentIndex() && label==this.measurement.getLabel())? measurement.getValue(): 0;
+    }
+    @Override
+    protected double expectedValue_i(int docIndex, double[] logNuY_i) {
+      // q(y) * annotation_value
+      return Math.exp(logNuY_i[measurement.getLabel()]) * measurement.getValue();
+    }
+    @Override
+    public Set<Integer> getDependentIndices() {
+      return Sets.newHashSet(measurement.getDocumentIndex());
+    }
+    @Override
+    public Measurement getMeasurement() {
+      return (Measurement) measurement;
+    }
+
+  }
+ 
+  
+
+  public static MeasurementExpectation<Integer> fromMeasurement(Measurement measurement, Dataset dataset, double[][] logNuY){
+    if (measurement instanceof ClassificationAnnotationMeasurement){
+      return new ClassificationMeasurementExpectations.Annotation(
+          (ClassificationAnnotationMeasurement) measurement, dataset, logNuY);
+    }
+    else if (measurement instanceof BasicClassificationLabelProportionMeasurement){
+      return new ClassificationMeasurementExpectations.LabelProportion(
+          (ClassificationProportionMeasurement) measurement, dataset, logNuY);
+    }
+    else{
+      throw new IllegalArgumentException("unknown measurement type: "+measurement.getClass().getName());
+    }
+    
+  }
+  
 }

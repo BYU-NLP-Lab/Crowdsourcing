@@ -1,6 +1,9 @@
 package edu.byu.nlp.crowdsourcing.measurements;
 
+import java.util.Set;
+
 import edu.byu.nlp.data.types.Dataset;
+import edu.byu.nlp.data.types.Measurement;
 
 /**
  * A Measurement generalizes the concept of a label or annotation.
@@ -19,7 +22,17 @@ public interface MeasurementExpectation<L> {
    * (e.g., they might reference a specific instance inside of a dataset). 
    */
   Dataset getDataset();
+  
+  /**
+   * Get the actual measurement data the this function was constructed from.
+   */
+  Measurement getMeasurement();
 
+  /**
+   * Who was responsible for generating this measurement? 
+   */
+  int getAnnotator();
+    
   /**
    * Returns the value of the Measurement on a 
    * single item. Mathematically, Measurments are 
@@ -40,21 +53,25 @@ public interface MeasurementExpectation<L> {
   double featureValue(int docIndex, L label);
   
   /**
+   * Many measurements depend on only a single data instance 
+   * (e.g., annotations of single instances). This method 
+   * yields the set of document indices that this measurement 
+   * depends on (so that it can be updated via 
+   * setLogNuY_i() only when absolutely necessary).
+   */
+  Set<Integer> getDependentIndices();
+  
+  /**
    * For efficiency reasons, we must be able to alter a single element of 
    * the expectation at a time (as they are updated) rather than recomputing 
    * the entire expectation each time a single element changes. 
    */
-  double setLogNuY_i(int i, double[] logNuY_i);
+  void setLogNuY_i(int docIndex, double[] logNuY_i);
   
   /**
    * The value of E_y[sum_i feature(x_i,y)] wrt the approximate distribution q(y)
    */
-  double expectationValue();
+  double expectedValue();
   
-  /**
-   * Who was responsible for generating this measurement? 
-   */
-  int getAnnotator();
-    
   
 }

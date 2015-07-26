@@ -62,6 +62,7 @@ public class ClassificationMeasurementModelLabeler implements DatasetLabeler{
     }
     
     ClassificationMeasurementModel.State state = model.getCurrentState();
+    ClassificationMeasurementModelCounts counts = ClassificationMeasurementModelCounts.from(state); 
     Dataset data = state.getData();
     
     // corpus predictions 
@@ -87,7 +88,7 @@ public class ClassificationMeasurementModelLabeler implements DatasetLabeler{
     double[] annotatorAccuracies = null;
     double machineAccuracy = -1;
     
-    double logJoint = model.logJoint();
+    double logJoint = model.lowerBound(counts);
     return new Predictions(labeledPredictions,
                                                          unlabeledPredictions,
                                                          heldoutPredictions,

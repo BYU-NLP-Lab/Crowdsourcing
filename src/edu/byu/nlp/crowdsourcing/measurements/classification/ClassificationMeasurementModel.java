@@ -7,7 +7,6 @@ import com.google.gson.Gson;
 
 import edu.byu.nlp.classify.util.ModelTraining.SupportsTrainingOperations;
 import edu.byu.nlp.crowdsourcing.PriorSpecification;
-import edu.byu.nlp.crowdsourcing.measurements.AbstractMeasurementModelBuilder;
 import edu.byu.nlp.crowdsourcing.measurements.AbstractMeasurementModelBuilder.StaticMeasurementModelCounts;
 import edu.byu.nlp.data.types.Dataset;
 import edu.byu.nlp.data.types.DatasetInstance;
@@ -18,7 +17,7 @@ public interface ClassificationMeasurementModel extends SupportsTrainingOperatio
   
   Map<String,Integer> getInstanceIndices();
 
-  double logJoint();
+  double lowerBound(ClassificationMeasurementModelCounts counts);
 
   double[] fitOutOfCorpusInstance(DatasetInstance instance);
   
@@ -42,7 +41,7 @@ public interface ClassificationMeasurementModel extends SupportsTrainingOperatio
     private Dataset data;
     private StaticMeasurementModelCounts staticCounts;
 
-    public State setY(double[][] y){
+    public State setLogNuY(double[][] y){
       this.logNuY=y;
       return this;
     }
@@ -66,19 +65,19 @@ public interface ClassificationMeasurementModel extends SupportsTrainingOperatio
       return instanceIndices;
     }
 
-    public State setTheta(double[] theta){
+    public State setNuTheta(double[] theta){
       this.nuTheta=theta;
       return this;
     }
-    public double[] getTheta(){
+    public double[] getNuTheta(){
       return nuTheta;
     }
 
-    public State setSigma2(double[][] sigma2){
+    public State setNuSigma2(double[][] sigma2){
       this.nuSigma2=sigma2;
       return this;
     }
-    public double[][] getSigma2(){
+    public double[][] getNuSigma2(){
       return nuSigma2;
     }
 
@@ -119,9 +118,9 @@ public interface ClassificationMeasurementModel extends SupportsTrainingOperatio
       .setData(data)
       .setInstanceIndices(instanceIndices)
       .setPriors(priors)
-      .setSigma2(nuSigma2)
-      .setTheta(nuTheta)
-      .setY(logNuY)
+      .setNuSigma2(nuSigma2)
+      .setNuTheta(nuTheta)
+      .setLogNuY(logNuY)
       ;
     }
   }
