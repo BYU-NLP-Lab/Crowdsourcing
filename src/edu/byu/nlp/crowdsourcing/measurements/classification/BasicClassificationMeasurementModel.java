@@ -274,12 +274,19 @@ public class BasicClassificationMeasurementModel implements ClassificationMeasur
     @Override
     protected ClassificationMeasurementModel buildModel(PriorSpecification priors, Dataset data, int[] y,
         StaticMeasurementModelCounts staticCounts, Map<String, Integer> instanceIndices, RandomGenerator rnd) {
+      double[] nuTheta = new double[data.getInfo().getNumClasses()];
+      double[][] nuSigma2 = new double[data.getInfo().getNumAnnotators()][2];
+      double[][] logNuY = new double[data.getInfo().getNumDocuments()][data.getInfo().getNumClasses()];
       ClassificationMeasurementModel.State state = 
-          new ClassificationMeasurementModel.State()
+          new ClassificationMeasurementModel.State.Builder()
             .setData(data)
             .setPriors(priors)
             .setInstanceIndices(instanceIndices)
             .setStaticCounts(staticCounts)
+            .setNuTheta(nuTheta)
+            .setNuSigma2(nuSigma2)
+            .setLogNuY(logNuY)
+            .build()
             ;
       
       // create model and initialize variational parameters with an empirical fit
