@@ -16,6 +16,7 @@
 package edu.byu.nlp.crowdsourcing.measurements.classification;
 
 import java.util.Map;
+import java.util.Random;
 
 import org.apache.commons.math3.random.RandomGenerator;
 import org.slf4j.Logger;
@@ -67,9 +68,18 @@ public class BasicClassificationMeasurementModel implements ClassificationMeasur
     // construct an updated state (without changing the old state yet)
     State newstate = state.copy();
     ClassificationMeasurementModelCounts counts = ClassificationMeasurementModelCounts.from(state);
+    System.out.println("LB after initialization: "+lowerBound(newstate,counts));
+//    for (int j=0; j<state.getNumAnnotators(); j++){
+//      newstate.getNuSigma2()[j][0] = (new Random().nextDouble()+100)*10;
+//      newstate.getNuSigma2()[j][1] = (new Random().nextDouble()+100)*10; 
+//    }
+//    System.out.println("LB after randomization of sigma2: "+lowerBound(newstate,counts));
     fitNuTheta(newstate.getNuTheta(), counts);
+    System.out.println("LB after futNuTheta: "+lowerBound(newstate,counts));
     fitNuSigma2(newstate.getNuSigma2(), counts);
+    System.out.println("LB after fitNuSigma2: "+lowerBound(newstate,counts));
     fitLogNuY(newstate.getLogNuY(), counts);
+    System.out.println("LB after fitLogNuY: "+lowerBound(newstate,counts));
 
     
     // swap in new state all at once
@@ -138,7 +148,11 @@ public class BasicClassificationMeasurementModel implements ClassificationMeasur
         for (int j=0; j<state.getNumAnnotators(); j++){
           double t3 = 0;
           for (MeasurementExpectation<Integer> expectation: counts.getExpectationsForAnnotator(j)){
-            t3 += Math.pow(expectation.getMeasurement().getValue() - expectation.expectedValue(), 2);
+            // for the purposes of this calculation, 'remove' all expectations that depend on 
+            // y_i by setting y_i to 0 (then resetting after)
+            expectation.setSummandVisible(i,false);
+            t3 += Math.pow(expectation.getMeasurement().getValue() - expectation.expectedValue() - expectation.featureValue(i, c), 2);
+            expectation.setSummandVisible(i,true);
           }
           double t4 = beta/(alpha-1); // E[sigma2]
           
@@ -148,10 +162,15 @@ public class BasicClassificationMeasurementModel implements ClassificationMeasur
         logNuY[i][c] = t1 - t2;
       }
     }
+    Matrices.logNormalizeRowsToSelf(logNuY);
   }
 
 
   public double lowerBound(ClassificationMeasurementModelCounts counts) {
+    return lowerBound(state, counts);
+  }
+  
+  public static double lowerBound(State state, ClassificationMeasurementModelCounts counts) {
     double elbo = state.getStaticCounts().getLogLowerBoundConstant();
     
     // precalculate values
@@ -167,8 +186,9 @@ public class BasicClassificationMeasurementModel implements ClassificationMeasur
     }
     
     // part 2
-    double alpha = state.getPriors().getBGamma(), beta = state.getPriors().getCGamma(); // shoe-horned IG prior params
+//    double alpha = state.getPriors().getBGamma(), beta = state.getPriors().getCGamma(); // shoe-horned IG prior params
     for (int j=0; j<state.getNumAnnotators(); j++){
+      double alpha = state.getNuSigma2()[j][0], beta = state.getNuSigma2()[j][1]; // IG variational params
       // part 2a
       double t1 = -( (state.getStaticCounts().getPerAnnotatorMeasurements().getCount(j) / 2.0) + alpha) - 1;
       double t2 = Math.log(beta) - Dirichlet.digamma(alpha);
@@ -203,7 +223,8 @@ public class BasicClassificationMeasurementModel implements ClassificationMeasur
       for (Measurement measurement: instance.getAnnotations().getMeasurements()){
         if (measurement instanceof ClassificationAnnotationMeasurement){
           ClassificationAnnotationMeasurement annotation = (ClassificationAnnotationMeasurement) measurement;
-          logNuY[instance.getInfo().getSource()][annotation.getLabel()] += annotation.getValue();
+          int docIndex = getInstanceIndices().get(instance.getInfo().getRawSource());
+          logNuY[docIndex][annotation.getLabel()] += annotation.getValue();
         }
       }
     }

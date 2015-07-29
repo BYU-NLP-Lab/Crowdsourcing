@@ -72,6 +72,12 @@ public interface MeasurementExpectation<L> {
    * The value of E_y[sum_i feature(x_i,y)] wrt the approximate distribution q(y)
    */
   double expectedValue();
-  
+
+  /**
+   * Each expectation consists of a sum of terms 
+   * (one per dataset item). Set whether or not 
+   * the ith term participates in the overall sum
+   */
+  void setSummandVisible(int i, boolean visible);
   
 }

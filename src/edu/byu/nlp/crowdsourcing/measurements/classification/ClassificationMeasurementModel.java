@@ -151,6 +151,7 @@ public interface ClassificationMeasurementModel extends SupportsTrainingOperatio
       .setInstanceIndices(instanceIndices)
       .setPriors(priors)
       .setNuSigma2(nuSigma2)
+      .setStaticCounts(staticCounts)
       .setNuTheta(nuTheta)
       .setLogNuY(logNuY)
       .build()

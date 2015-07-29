@@ -82,10 +82,10 @@ public class ClassificationMeasurementModelLabeler implements DatasetLabeler{
         heldoutInstances, data.getInfo().getNumFeatures(), data.getInfo().getNumClasses(), model);
     
     // confusions
-    double[][][] annotatorConfusionMatrices = null;
-    double[][] machineConfusionMatrix = null;
+    double[][][] annotatorConfusionMatrices = new double[data.getInfo().getNumAnnotators()][data.getInfo().getNumClasses()][data.getInfo().getNumClasses()];
+    double[][] machineConfusionMatrix = new double[data.getInfo().getNumClasses()][data.getInfo().getNumClasses()];
     // accuracies
-    double[] annotatorAccuracies = null;
+    double[] annotatorAccuracies = new double[data.getInfo().getNumAnnotators()];
     double machineAccuracy = -1;
     
     double logJoint = model.lowerBound(counts);

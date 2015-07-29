@@ -33,7 +33,7 @@ import edu.byu.nlp.data.types.Measurement;
  */
 public class ClassificationMeasurementModelCounts {
 
-  private Map<Integer, Collection<MeasurementExpectation<Integer>>> measurementsForDocIndex;
+//  private Map<Integer, Collection<MeasurementExpectation<Integer>>> measurementsForDocIndex;
   private Map<Integer, Collection<MeasurementExpectation<Integer>>> measurementsForAnnotator;
 
   private ClassificationMeasurementModelCounts() {
@@ -41,42 +41,43 @@ public class ClassificationMeasurementModelCounts {
 
   public static ClassificationMeasurementModelCounts from(State state) {
     ClassificationMeasurementModelCounts updater = new ClassificationMeasurementModelCounts();
-    updater.initialize(state.getData(), state.getLogNuY());
+    updater.initialize(state.getData(), state.getInstanceIndices(), state.getLogNuY());
     return updater;
   }
 
-  public void setLogNuY_i(int docIndex, double[] logNuY_i) {
-    for (MeasurementExpectation<Integer> expectation : measurementsForDocIndex.get(docIndex)) {
-      expectation.setLogNuY_i(docIndex, logNuY_i);
-    }
-  }
+//  public void setLogNuY_i(int docIndex, double[] logNuY_i) {
+//    for (MeasurementExpectation<Integer> expectation : measurementsForDocIndex.get(docIndex)) {
+//      expectation.setLogNuY_i(docIndex, logNuY_i);
+//    }
+//  }
 
   public Collection<MeasurementExpectation<Integer>> getExpectationsForAnnotator(int annotator){
     return measurementsForAnnotator.get(annotator);
   }
 
-  public Collection<MeasurementExpectation<Integer>> getExpectationsForInstance(int docIndex){
-    return measurementsForDocIndex.get(docIndex);
-  }
+//  public Collection<MeasurementExpectation<Integer>> getExpectationsForInstance(int docIndex){
+//    return measurementsForDocIndex.get(docIndex);
+//  }
 
-  public void initialize(Dataset dataset, double[][] logNuY) {
+  public void initialize(Dataset dataset, Map<String, Integer> instanceIndices, double[][] logNuY) {
 
-    if (measurementsForDocIndex == null) {
+    if (measurementsForAnnotator == null) {
 
       // multimaps
-      Multimap<Integer, MeasurementExpectation<Integer>> perDocIndex = ArrayListMultimap.create();
+//      Multimap<Integer, MeasurementExpectation<Integer>> perDocIndex = ArrayListMultimap.create();
       Multimap<Integer, MeasurementExpectation<Integer>> perAnnotator = ArrayListMultimap.create();
 
       // initialize each measurement expectation with the data (and index it for easy lookup)
       for (DatasetInstance item : dataset) {
         for (Measurement measurement : item.getAnnotations().getMeasurements()) {
+//          int docIndex = instanceIndices.get(item.getInfo().getRawSource());
           MeasurementExpectation<Integer> expectation = ClassificationMeasurementExpectations.fromMeasurement(measurement, dataset, logNuY);
-          perDocIndex.put(item.getInfo().getSource(), expectation);
+//          perDocIndex.put(docIndex, expectation);
           perAnnotator.put(measurement.getAnnotator(), expectation);
         }
       }
 
-      measurementsForDocIndex = perDocIndex.asMap();
+//      measurementsForDocIndex = perDocIndex.asMap();
       measurementsForAnnotator = perAnnotator.asMap();
     }
 

@@ -63,6 +63,14 @@ public class ClassificationMeasurementExpectations {
     public double expectedValue() {
       return expectation.getSum();
     }
+    @Override
+    public Measurement getMeasurement() {
+      return measurement;
+    }
+    @Override
+    public void setSummandVisible(int i, boolean visible) {
+      expectation.setSummandActive(i,visible);
+    }
     protected abstract double expectedValue_i(int docIndex, double[] logNuY_i);
   }
   
@@ -70,19 +78,16 @@ public class ClassificationMeasurementExpectations {
   
   public static class LabelProportion extends AbstractExpectation{
 
-    private ClassificationProportionMeasurement measurement;
-
     public LabelProportion(ClassificationProportionMeasurement measurement, Dataset dataset, double[][] logNuY) {
       super((Measurement) measurement, dataset, logNuY);
-      this.measurement=measurement;
     }
     @Override
     public double featureValue(int docIndex, Integer label) {
-      return (label==measurement.getLabel())? 1: 0;
+      return (label==getClassificationMeasurement().getLabel())? 1: 0;
     }
     @Override
     protected double expectedValue_i(int docIndex, double[] logNuY_i) {
-      return Math.exp(logNuY_i[measurement.getLabel()]);
+      return Math.exp(logNuY_i[getClassificationMeasurement().getLabel()]);
     }
     @Override
     public Set<Integer> getDependentIndices() {
@@ -91,40 +96,36 @@ public class ClassificationMeasurementExpectations {
           IntArrays.asList(
               IntArrays.sequence(0, getDataset().getInfo().getNumDocuments())));
     }
-    @Override
-    public Measurement getMeasurement() {
-      return (Measurement) measurement;
+    public ClassificationProportionMeasurement getClassificationMeasurement(){
+      return (ClassificationProportionMeasurement) getMeasurement();
     }
-    
   }
   
   
   
   public static class Annotation extends AbstractExpectation{
 
-    private ClassificationAnnotationMeasurement measurement;
     public Annotation(ClassificationAnnotationMeasurement measurement, Dataset dataset, double[][] logNuY) {
       super((Measurement) measurement, dataset, logNuY);
-      this.measurement=measurement;
     }
     @Override
     public double featureValue(int docIndex, Integer label) {
-      return (docIndex==this.measurement.getDocumentIndex() && label==this.measurement.getLabel())? measurement.getValue(): 0;
+      ClassificationAnnotationMeasurement meas = getClassificationMeasurement();
+      return (docIndex==meas.getDocumentIndex() && label==meas.getLabel())? meas.getValue(): 0;
     }
     @Override
     protected double expectedValue_i(int docIndex, double[] logNuY_i) {
+      ClassificationAnnotationMeasurement meas = getClassificationMeasurement();
       // q(y) * annotation_value
-      return Math.exp(logNuY_i[measurement.getLabel()]) * measurement.getValue();
+      return Math.exp(logNuY_i[meas.getLabel()]) * meas.getValue();
     }
     @Override
     public Set<Integer> getDependentIndices() {
-      return Sets.newHashSet(measurement.getDocumentIndex());
+      return Sets.newHashSet(getClassificationMeasurement().getDocumentIndex());
     }
-    @Override
-    public Measurement getMeasurement() {
-      return (Measurement) measurement;
+    public ClassificationAnnotationMeasurement getClassificationMeasurement(){
+      return (ClassificationAnnotationMeasurement) getMeasurement();
     }
-
   }
  
   
