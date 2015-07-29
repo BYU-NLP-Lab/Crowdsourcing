@@ -16,7 +16,6 @@
 package edu.byu.nlp.crowdsourcing.measurements.classification;
 
 import java.util.Map;
-import java.util.Random;
 
 import org.apache.commons.math3.random.RandomGenerator;
 import org.slf4j.Logger;
@@ -121,7 +120,7 @@ public class BasicClassificationMeasurementModel implements ClassificationMeasur
       // each inverse gamma distributed sigma2_j has two variational parameters: shape (nuSigma2[j][0]) and scale (nuSigma2[j][1]).
 
       // variational posterior shape parameter
-      nuSigma2[j][0] = (state.getStaticCounts().getPerAnnotatorMeasurements().getCount(j) / 2.0) - alpha;
+      nuSigma2[j][0] = (state.getStaticCounts().getPerAnnotatorMeasurements().getCount(j) / 2.0) + alpha;
       
       // variational posterior scale parameter
       double summedExpectationError = 0;
@@ -137,7 +136,7 @@ public class BasicClassificationMeasurementModel implements ClassificationMeasur
     // pre-calculate
     double[] digammaOfNuThetas = MeanFieldMultiRespModel.digammasOfArray(state.getNuTheta());
     double digammaOfSummedNuThetas = MeanFieldMultiRespModel.digammaOfSummedArray(state.getNuTheta());
-    double alpha = state.getPriors().getBGamma(), beta = state.getPriors().getCGamma();
+//    double alpha = state.getPriors().getBGamma(), beta = state.getPriors().getCGamma();
     
     for (int i=0; i<state.getNumDocuments(); i++){
       for (int c=0; c<state.getNumClasses(); c++){
@@ -146,6 +145,7 @@ public class BasicClassificationMeasurementModel implements ClassificationMeasur
         
         double t2 = 0;
         for (int j=0; j<state.getNumAnnotators(); j++){
+          double alpha = state.getNuSigma2()[j][0], beta = state.getNuSigma2()[j][1];
           double t3 = 0;
           for (MeasurementExpectation<Integer> expectation: counts.getExpectationsForAnnotator(j)){
             // for the purposes of this calculation, 'remove' all expectations that depend on 
@@ -200,7 +200,7 @@ public class BasicClassificationMeasurementModel implements ClassificationMeasur
         t3 += Math.pow(expectation.getMeasurement().getValue() - expectation.expectedValue(), 2);
       }
       double t4 = beta/(alpha-1); // E[sigma2]
-      elbo += -(beta + (0.5 * t3) / t4);
+      elbo -= (beta + (0.5 * t3)) / t4;
     }
     
     return elbo;
@@ -218,21 +218,27 @@ public class BasicClassificationMeasurementModel implements ClassificationMeasur
     // as log values and normalizing. A lack of annotations is interpreted as a value 
     // of log 1 = 0, so we are effectively doing add-1 smoothing on all counts.
     // Interpreting values as log values allows us to use negative and positive values.
-    double[][] logNuY = new double[state.getNumDocuments()][state.getNumClasses()];
     for (DatasetInstance instance: data){
+      int docIndex = getInstanceIndices().get(instance.getInfo().getRawSource());
+      
+      // clear values (just in case they aren't already 0)
+      for (int c=0; c<state.getNumClasses(); c++){
+        state.getLogNuY()[docIndex][c] = 0;
+      }
+      
+      // increment with measured annotation values
       for (Measurement measurement: instance.getAnnotations().getMeasurements()){
         if (measurement instanceof ClassificationAnnotationMeasurement){
           ClassificationAnnotationMeasurement annotation = (ClassificationAnnotationMeasurement) measurement;
-          int docIndex = getInstanceIndices().get(instance.getInfo().getRawSource());
-          logNuY[docIndex][annotation.getLabel()] += annotation.getValue();
+          state.getLogNuY()[docIndex][annotation.getLabel()] += annotation.getValue();
         }
       }
     }
-    Matrices.logNormalizeRowsToSelf(logNuY);
+    Matrices.logNormalizeRowsToSelf(state.getLogNuY());
     
     // now set theta and sigma2 by fit
     ClassificationMeasurementModelCounts counts = ClassificationMeasurementModelCounts.from(state);
-    fitNuTheta(state.getNuTheta(), counts );
+    fitNuTheta(state.getNuTheta(), counts);
     fitNuSigma2(state.getNuSigma2(), counts);
     
   }

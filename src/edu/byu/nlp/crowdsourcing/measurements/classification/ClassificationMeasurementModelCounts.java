@@ -71,7 +71,7 @@ public class ClassificationMeasurementModelCounts {
       for (DatasetInstance item : dataset) {
         for (Measurement measurement : item.getAnnotations().getMeasurements()) {
 //          int docIndex = instanceIndices.get(item.getInfo().getRawSource());
-          MeasurementExpectation<Integer> expectation = ClassificationMeasurementExpectations.fromMeasurement(measurement, dataset, logNuY);
+          MeasurementExpectation<Integer> expectation = ClassificationMeasurementExpectations.fromMeasurement(measurement, dataset, instanceIndices, logNuY);
 //          perDocIndex.put(docIndex, expectation);
           perAnnotator.put(measurement.getAnnotator(), expectation);
         }

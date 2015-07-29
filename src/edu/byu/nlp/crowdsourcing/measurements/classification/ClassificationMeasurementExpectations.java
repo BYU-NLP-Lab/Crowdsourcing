@@ -1,6 +1,10 @@
 package edu.byu.nlp.crowdsourcing.measurements.classification;
 
+import java.util.Map;
 import java.util.Set;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.google.common.collect.Sets;
 
@@ -32,6 +36,7 @@ import edu.byu.nlp.util.IntArrays;
  */
 public class ClassificationMeasurementExpectations {
 
+  private static final Logger logger = LoggerFactory.getLogger(ClassificationMeasurementExpectations.class);
   
   public static abstract class AbstractExpectation implements MeasurementExpectation<Integer>{
     
@@ -42,8 +47,8 @@ public class ClassificationMeasurementExpectations {
     public AbstractExpectation(Measurement measurement, Dataset dataset, double[][] logNuY){
       this.measurement=measurement;
       this.dataset=dataset;
-      for (int i=0; i<logNuY.length; i++){
-        setLogNuY_i(i, logNuY[i]);
+      for (Integer docIndex: getDependentIndices()){
+        setLogNuY_i(docIndex, logNuY[docIndex]);
       }
     }
     @Override
@@ -105,23 +110,29 @@ public class ClassificationMeasurementExpectations {
   
   public static class Annotation extends AbstractExpectation{
 
-    public Annotation(ClassificationAnnotationMeasurement measurement, Dataset dataset, double[][] logNuY) {
+    private int index;
+    public Annotation(ClassificationAnnotationMeasurement measurement, Dataset dataset, Map<String,Integer> documentIndices, double[][] logNuY) {
       super((Measurement) measurement, dataset, logNuY);
+      this.index = documentIndices.get(measurement.getDocumentSource());
     }
     @Override
     public double featureValue(int docIndex, Integer label) {
       ClassificationAnnotationMeasurement meas = getClassificationMeasurement();
-      return (docIndex==meas.getDocumentIndex() && label==meas.getLabel())? meas.getValue(): 0;
+      return (docIndex==index && label==meas.getLabel())? meas.getValue(): 0;
     }
     @Override
     protected double expectedValue_i(int docIndex, double[] logNuY_i) {
       ClassificationAnnotationMeasurement meas = getClassificationMeasurement();
+      if (docIndex!=index){
+        logger.warn("DANGER! An annotation measurement is being asked for indices it doesn't depend on! This is VERY inefficient and probably indicates a bug!");
+        return 0;
+      }
       // q(y) * annotation_value
       return Math.exp(logNuY_i[meas.getLabel()]) * meas.getValue();
     }
     @Override
     public Set<Integer> getDependentIndices() {
-      return Sets.newHashSet(getClassificationMeasurement().getDocumentIndex());
+      return Sets.newHashSet(index);
     }
     public ClassificationAnnotationMeasurement getClassificationMeasurement(){
       return (ClassificationAnnotationMeasurement) getMeasurement();
@@ -129,11 +140,10 @@ public class ClassificationMeasurementExpectations {
   }
  
   
-
-  public static MeasurementExpectation<Integer> fromMeasurement(Measurement measurement, Dataset dataset, double[][] logNuY){
+  public static MeasurementExpectation<Integer> fromMeasurement(Measurement measurement, Dataset dataset, Map<String,Integer> documentIndices, double[][] logNuY){
     if (measurement instanceof ClassificationAnnotationMeasurement){
       return new ClassificationMeasurementExpectations.Annotation(
-          (ClassificationAnnotationMeasurement) measurement, dataset, logNuY);
+          (ClassificationAnnotationMeasurement) measurement, dataset, documentIndices, logNuY);
     }
     else if (measurement instanceof BasicClassificationLabelProportionMeasurement){
       return new ClassificationMeasurementExpectations.LabelProportion(
