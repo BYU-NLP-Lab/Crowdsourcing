@@ -136,7 +136,7 @@ public class BasicClassificationMeasurementModel implements ClassificationMeasur
     // pre-calculate
     double[] digammaOfNuThetas = MeanFieldMultiRespModel.digammasOfArray(state.getNuTheta());
     double digammaOfSummedNuThetas = MeanFieldMultiRespModel.digammaOfSummedArray(state.getNuTheta());
-//    double alpha = state.getPriors().getBGamma(), beta = state.getPriors().getCGamma();
+    double priorBeta = state.getPriors().getCGamma();
     
     for (int i=0; i<state.getNumDocuments(); i++){
       for (int c=0; c<state.getNumClasses(); c++){
@@ -145,18 +145,18 @@ public class BasicClassificationMeasurementModel implements ClassificationMeasur
         
         double t2 = 0;
         for (int j=0; j<state.getNumAnnotators(); j++){
-          double alpha = state.getNuSigma2()[j][0], beta = state.getNuSigma2()[j][1];
+          double postAlpha = state.getNuSigma2()[j][0], postBeta = state.getNuSigma2()[j][1];
           double t3 = 0;
-          for (MeasurementExpectation<Integer> expectation: counts.getExpectationsForAnnotator(j)){
+          for (MeasurementExpectation<Integer> expectation: counts.getExpectationsForAnnotatorInstanceAndLabel(j, i, c)){
             // for the purposes of this calculation, 'remove' all expectations that depend on 
             // y_i by setting y_i to 0 (then resetting after)
             expectation.setSummandVisible(i,false);
             t3 += Math.pow(expectation.getMeasurement().getValue() - expectation.expectedValue() - expectation.featureValue(i, c), 2);
             expectation.setSummandVisible(i,true);
           }
-          double t4 = beta/(alpha-1); // E[sigma2]
+          double t4 = postBeta/(postAlpha-1); // E[sigma2]
           
-          t2 = beta + (0.5 * t3) / t4;
+          t2 = priorBeta + (0.5 * t3) / t4;
         }
          
         logNuY[i][c] = t1 - t2;
@@ -186,12 +186,12 @@ public class BasicClassificationMeasurementModel implements ClassificationMeasur
     }
     
     // part 2
-//    double alpha = state.getPriors().getBGamma(), beta = state.getPriors().getCGamma(); // shoe-horned IG prior params
+    double priorAlpha = state.getPriors().getBGamma(), priorBeta = state.getPriors().getCGamma(); // shoe-horned IG prior params
     for (int j=0; j<state.getNumAnnotators(); j++){
-      double alpha = state.getNuSigma2()[j][0], beta = state.getNuSigma2()[j][1]; // IG variational params
+      double postAlpha = state.getNuSigma2()[j][0], postBeta = state.getNuSigma2()[j][1]; // IG variational params
       // part 2a
-      double t1 = -( (state.getStaticCounts().getPerAnnotatorMeasurements().getCount(j) / 2.0) + alpha) - 1;
-      double t2 = Math.log(beta) - Dirichlet.digamma(alpha);
+      double t1 = -( (state.getStaticCounts().getPerAnnotatorMeasurements().getCount(j) / 2.0) + priorAlpha) - 1;
+      double t2 = Math.log(postBeta) - Dirichlet.digamma(postAlpha);
       elbo += t1*t2;
     
       // part 2b
@@ -199,8 +199,8 @@ public class BasicClassificationMeasurementModel implements ClassificationMeasur
       for (MeasurementExpectation<Integer> expectation: counts.getExpectationsForAnnotator(j)){
         t3 += Math.pow(expectation.getMeasurement().getValue() - expectation.expectedValue(), 2);
       }
-      double t4 = beta/(alpha-1); // E[sigma2]
-      elbo -= (beta + (0.5 * t3)) / t4;
+      double t4 = postBeta/(postAlpha-1); // E[sigma2]
+      elbo -= (priorBeta + (0.5 * t3)) / t4;
     }
     
     return elbo;

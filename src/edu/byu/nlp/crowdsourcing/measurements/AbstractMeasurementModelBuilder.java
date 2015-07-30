@@ -66,7 +66,7 @@ public abstract class AbstractMeasurementModelBuilder {
   
   
   public static class StaticMeasurementModelCounts{
-    private Counter<Integer> perAnnotatorMeasurements;
+    private Counter<Integer> annotatorMeasurementCounter;
     private double logLowerBoundConstant;
     public StaticMeasurementModelCounts (Dataset data, PriorSpecification priors){
       initialize(data, priors);
@@ -75,7 +75,7 @@ public abstract class AbstractMeasurementModelBuilder {
      * A constant used by q(y) update
      */
     public Counter<Integer> getPerAnnotatorMeasurements(){
-      return perAnnotatorMeasurements;
+      return annotatorMeasurementCounter;
     }
     /**
      * A constant used in the lower bound calculation
@@ -85,20 +85,20 @@ public abstract class AbstractMeasurementModelBuilder {
     }
     
     private void initialize(Dataset data, PriorSpecification priors){
-      perAnnotatorMeasurements = new DenseCounter(data.getInfo().getNumAnnotators());
+      annotatorMeasurementCounter = new DenseCounter(data.getInfo().getNumAnnotators());
       for (DatasetInstance instance: data){
         for (Measurement measurement: instance.getAnnotations().getMeasurements()){
-          perAnnotatorMeasurements.incrementCount(measurement.getAnnotator(), 1);
+          annotatorMeasurementCounter.incrementCount(measurement.getAnnotator(), 1);
         }
       }
 
       // lower bound constant
-      double alpha = priors.getBGamma(), beta = priors.getCGamma(); // shoe-horned inverse gamma prior values
+      double priorAlpha = priors.getBGamma(), priorBeta = priors.getCGamma(); // shoe-horned inverse gamma prior values
       double lbterm1 = GammaFunctions.logBetaSymmetric(priors.getBTheta(),data.getInfo().getNumClasses());
-      double lbterm2 = (alpha * Math.log(beta)) - Gamma.logGamma(alpha);
+      double lbterm2 = (priorAlpha * Math.log(priorBeta)) - Gamma.logGamma(priorAlpha);
       double lbterm3 = 0;
       for (int j=0; j<data.getInfo().getNumAnnotators(); j++){
-        lbterm3 -= ((perAnnotatorMeasurements.getCount(j)/2.0) * Math.log(2.0*Math.PI));
+        lbterm3 -= ((annotatorMeasurementCounter.getCount(j)/2.0) * Math.log(2.0*Math.PI));
       }
       logLowerBoundConstant = lbterm1 + lbterm2 + lbterm3;
     }
