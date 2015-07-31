@@ -6,6 +6,7 @@ import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.google.common.base.MoreObjects;
 import com.google.common.collect.Sets;
 
 import edu.byu.nlp.crowdsourcing.measurements.MeasurementExpectation;
@@ -44,12 +45,9 @@ public class ClassificationMeasurementExpectations {
     private Measurement measurement;
     private Dataset dataset;
 
-    public AbstractExpectation(Measurement measurement, Dataset dataset, double[][] logNuY){
+    public AbstractExpectation(Measurement measurement, Dataset dataset){
       this.measurement=measurement;
       this.dataset=dataset;
-      for (Integer docIndex: getDependentIndices()){
-        setLogNuY_i(docIndex, logNuY[docIndex]);
-      }
     }
     @Override
     public Dataset getDataset() {
@@ -76,6 +74,12 @@ public class ClassificationMeasurementExpectations {
     public void setSummandVisible(int i, boolean visible) {
       expectation.setSummandActive(i,visible);
     }
+    @Override
+    public String toString() {
+      return MoreObjects.toStringHelper(MeasurementExpectation.class)
+          .add("meas",getMeasurement())
+          .toString();
+    }
     protected abstract double expectedValue_i(int docIndex, double[] logNuY_i);
   }
   
@@ -83,8 +87,8 @@ public class ClassificationMeasurementExpectations {
   
   public static class LabelProportion extends AbstractExpectation{
 
-    public LabelProportion(ClassificationProportionMeasurement measurement, Dataset dataset, double[][] logNuY) {
-      super((Measurement) measurement, dataset, logNuY);
+    public LabelProportion(ClassificationProportionMeasurement measurement, Dataset dataset) {
+      super((Measurement) measurement, dataset);
     }
     @Override
     public double featureValue(int docIndex, Integer label) {
@@ -111,8 +115,8 @@ public class ClassificationMeasurementExpectations {
   public static class Annotation extends AbstractExpectation{
 
     private int index;
-    public Annotation(ClassificationAnnotationMeasurement measurement, Dataset dataset, Map<String,Integer> documentIndices, double[][] logNuY) {
-      super((Measurement) measurement, dataset, logNuY);
+    public Annotation(ClassificationAnnotationMeasurement measurement, Dataset dataset, Map<String,Integer> documentIndices) {
+      super((Measurement) measurement, dataset);
       this.index = documentIndices.get(measurement.getDocumentSource());
     }
     @Override
@@ -141,17 +145,27 @@ public class ClassificationMeasurementExpectations {
  
   
   public static MeasurementExpectation<Integer> fromMeasurement(Measurement measurement, Dataset dataset, Map<String,Integer> documentIndices, double[][] logNuY){
+    MeasurementExpectation<Integer> expectation;
+    
+    // create the expectation
     if (measurement instanceof ClassificationAnnotationMeasurement){
-      return new ClassificationMeasurementExpectations.Annotation(
-          (ClassificationAnnotationMeasurement) measurement, dataset, documentIndices, logNuY);
+      expectation = new ClassificationMeasurementExpectations.Annotation(
+          (ClassificationAnnotationMeasurement) measurement, dataset, documentIndices);
     }
     else if (measurement instanceof BasicClassificationLabelProportionMeasurement){
-      return new ClassificationMeasurementExpectations.LabelProportion(
-          (ClassificationProportionMeasurement) measurement, dataset, logNuY);
+      expectation = new ClassificationMeasurementExpectations.LabelProportion(
+          (ClassificationProportionMeasurement) measurement, dataset);
     }
     else{
       throw new IllegalArgumentException("unknown measurement type: "+measurement.getClass().getName());
     }
+    
+    // initialize the expectation
+    for (Integer docIndex: expectation.getDependentIndices()){
+      expectation.setLogNuY_i(docIndex, logNuY[docIndex]);
+    }
+    
+    return expectation;
     
   }
   
