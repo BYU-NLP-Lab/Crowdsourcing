@@ -160,13 +160,14 @@ public class BasicClassificationMeasurementModel implements ClassificationMeasur
           for (MeasurementExpectation<Integer> expectation: counts.getExpectationsForAnnotatorAndInstance(j, i)){
             // for the purposes of this calculation, 'remove' all expectations that depend on 
             // y_i by setting y_i to 0 (then resetting after)
-            expectation.setSummandVisible(i,false);
-            expectedMeasurementError += Math.pow(expectation.getMeasurement().getValue() - expectation.expectedValue() - expectation.featureValue(i, c), 2);
-            expectation.setSummandVisible(i,true);
+//            expectation.setSummandVisible(i,false);
+//            expectedMeasurementError += Math.pow(expectation.getMeasurement().getValue() - expectation.expectedValue() - expectation.featureValue(i, c), 2);
+            expectedMeasurementError += Math.pow(expectation.getMeasurement().getValue() - expectation.featureValue(i, c), 2);
+//            expectation.setSummandVisible(i,true);
           }
           double expectedVariance = postBeta/(postAlpha-1); // E[sigma2]
           
-          t3 = (0.5 * expectedMeasurementError) / expectedVariance;
+          t3 += (0.5 * expectedMeasurementError) / expectedVariance;
         }
          
         logNuY[i][c] = t1 - t3; // - t2
@@ -218,7 +219,7 @@ public class BasicClassificationMeasurementModel implements ClassificationMeasur
     double expQlogQ = 0;
 
     // theta
-    expQlogQ += GammaFunctions.logBeta(state.getNuTheta()); // normalizing constant 
+    expQlogQ -= GammaFunctions.logBeta(state.getNuTheta()); // normalizing constant 
     for (int c=0; c<state.getNumClasses(); c++){
       double t1 = digammaOfNuThetas[c] - digammaOfSummedNuThetas;
       double t2 = state.getNuTheta()[c] - 1;
@@ -232,7 +233,7 @@ public class BasicClassificationMeasurementModel implements ClassificationMeasur
       expQlogQ += postAlpha * Math.log(postBeta);
       expQlogQ -= Dirichlet.logGamma(postAlpha);
       expQlogQ += (-postAlpha-1) * (Math.log(postBeta) - Dirichlet.digamma(postAlpha));
-      expQlogQ -= postAlpha - 1;
+      expQlogQ += -postAlpha + 1;
     }
 
     // y 
