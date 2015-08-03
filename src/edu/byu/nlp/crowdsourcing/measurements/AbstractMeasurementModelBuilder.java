@@ -94,6 +94,7 @@ public abstract class AbstractMeasurementModelBuilder {
 
       // lower bound constant
       double priorAlpha = priors.getBGamma(), priorBeta = priors.getCGamma(), priorDelta = priors.getBTheta(); // shoe-horned inverse gamma prior values
+      
       double lbterm1 = - GammaFunctions.logBetaSymmetric(priorDelta,data.getInfo().getNumClasses());
       double lbterm2 = data.getInfo().getNumAnnotators() * priorAlpha * Math.log(priorBeta);
       double lbterm3 = - data.getInfo().getNumAnnotators() * Gamma.logGamma(priorAlpha);

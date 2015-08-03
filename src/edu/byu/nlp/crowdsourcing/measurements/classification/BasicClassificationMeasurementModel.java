@@ -33,7 +33,6 @@ import edu.byu.nlp.data.types.Dataset;
 import edu.byu.nlp.data.types.DatasetInstance;
 import edu.byu.nlp.data.types.Measurement;
 import edu.byu.nlp.math.GammaFunctions;
-import edu.byu.nlp.util.DoubleArrays;
 import edu.byu.nlp.util.Matrices;
 
 /**
@@ -72,10 +71,10 @@ public class BasicClassificationMeasurementModel implements ClassificationMeasur
     System.out.println("LB after initialization: "+lowerBound(newstate,counts));
     fitNuTheta(newstate.getNuTheta());
     System.out.println("LB after futNuTheta: "+lowerBound(newstate,counts));
-    System.out.println("nuTheta: "+DoubleArrays.toString(state.getNuTheta()));
+//    System.out.println("nuTheta: "+DoubleArrays.toString(state.getNuTheta()));
     fitNuSigma2(newstate.getNuSigma2(), counts);
     System.out.println("LB after fitNuSigma2: "+lowerBound(newstate,counts));
-    System.out.println("nuSigma2: "+Matrices.toString(state.getNuSigma2()));
+//    System.out.println("nuSigma2: "+Matrices.toString(state.getNuSigma2()));
     fitLogNuY(newstate.getLogNuY(), counts);
     counts = ClassificationMeasurementModelCounts.from(state); // have to update this since nuY changed
     System.out.println("LB after fitLogNuY: "+lowerBound(newstate,counts));
@@ -187,11 +186,11 @@ public class BasicClassificationMeasurementModel implements ClassificationMeasur
     for (int c=0; c<state.getNumClasses(); c++){
       double t1 = digammaOfNuThetas[c] - digammaOfSummedNuThetas;
       double t2 = priorDelta + classCounts[c] - 1;
-      part1t2 += t1*t2;
+      part1t2 += t1 * t2;
     }
     
-    // part1 - terms 3 and 4
-    double part1t3 = 0, part1t4 = 0;
+    // part1 - terms 3 
+    double part1t3 = 0;
     for (int j=0; j<state.getNumAnnotators(); j++){
       double postAlpha = state.getNuSigma2()[j][0], postBeta = state.getNuSigma2()[j][1]; // IG variational params
       
@@ -200,7 +199,14 @@ public class BasicClassificationMeasurementModel implements ClassificationMeasur
       double part1t3b = Math.log(postBeta) - Dirichlet.digamma(postAlpha);
       part1t3 += part1t3a * part1t3b;
     
-      // part 1 - term 4
+    }
+
+    // part1 - term 4
+    double part1t4 = 0;
+    for (int j=0; j<state.getNumAnnotators(); j++){
+      double postAlpha = state.getNuSigma2()[j][0], postBeta = state.getNuSigma2()[j][1]; // IG variational params
+      
+      // error sum
       double errorSum = 0;
       for (MeasurementExpectation<Integer> expectation: counts.getExpectationsForAnnotator(j)){
         errorSum += Math.pow(expectation.getMeasurement().getValue() - expectation.expectedValue(), 2);
@@ -208,7 +214,8 @@ public class BasicClassificationMeasurementModel implements ClassificationMeasur
       
       double part1t4a = -(postAlpha-1)/postBeta; 
       double part1t4b = priorBeta + (0.5 * errorSum);
-      part1t4 = part1t4a * part1t4b;
+      part1t4 += part1t4a * part1t4b;
+    
     }
     
     double expQlogP = part1t1 + part1t2 + part1t3 + part1t4;
@@ -234,10 +241,10 @@ public class BasicClassificationMeasurementModel implements ClassificationMeasur
       double postAlpha = state.getNuSigma2()[j][0], postBeta = state.getNuSigma2()[j][1];
       
       part2t3 -= Dirichlet.logGamma(postAlpha)
-                  + Math.log(postBeta)
-                  + Dirichlet.digamma(postAlpha)
-                  + postAlpha 
-                  - 1;
+          - Dirichlet.digamma(postAlpha) * (postAlpha + 1)
+          + Math.log(postBeta)
+          + postAlpha
+          - 1;
     }
 
     // y
