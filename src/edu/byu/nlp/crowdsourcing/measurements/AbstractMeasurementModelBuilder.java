@@ -93,14 +93,15 @@ public abstract class AbstractMeasurementModelBuilder {
       }
 
       // lower bound constant
-      double priorAlpha = priors.getBGamma(), priorBeta = priors.getCGamma(); // shoe-horned inverse gamma prior values
-      double lbterm1 = GammaFunctions.logBetaSymmetric(priors.getBTheta(),data.getInfo().getNumClasses());
-      double lbterm2 = (priorAlpha * Math.log(priorBeta)) - Gamma.logGamma(priorAlpha);
-      double lbterm3 = 0;
+      double priorAlpha = priors.getBGamma(), priorBeta = priors.getCGamma(), priorDelta = priors.getBTheta(); // shoe-horned inverse gamma prior values
+      double lbterm1 = - GammaFunctions.logBetaSymmetric(priorDelta,data.getInfo().getNumClasses());
+      double lbterm2 = data.getInfo().getNumAnnotators() * priorAlpha * Math.log(priorBeta);
+      double lbterm3 = - data.getInfo().getNumAnnotators() * Gamma.logGamma(priorAlpha);
+      double lbterm4 = 0;
       for (int j=0; j<data.getInfo().getNumAnnotators(); j++){
-        lbterm3 -= ((annotatorMeasurementCounter.getCount(j)/2.0) * Math.log(2.0*Math.PI));
+        lbterm4 -= ((annotatorMeasurementCounter.getCount(j)/2.0) * Math.log(2.0*Math.PI));
       }
-      logLowerBoundConstant = lbterm1 + lbterm2 + lbterm3;
+      logLowerBoundConstant = lbterm1 + lbterm2 + lbterm3 + lbterm4;
     }
   }
   

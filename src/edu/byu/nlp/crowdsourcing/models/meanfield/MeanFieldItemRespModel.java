@@ -422,8 +422,10 @@ public class MeanFieldItemRespModel extends AbstractMeanFieldMultiAnnModel {
     double term2 = t2thetaterm + t2gammaterm + t2gterm - t2thetanorm - t2gammanorm;
     
     // debugging the validity of the variational bound
+    // paul: coming back to it, I'm not sure why this is a divergence. Shouldn't we remove the g term?
     double div1 = (t2thetaterm + t2gterm - t2thetanorm) - (t1thetaterm - t1thetanorm);
-    double div2 = (t2gammaterm - t2gammanorm) - (t1gammaterm - t1gammanorm);
+    // E_q[ln q(gamma) / p(gamma)]
+    double div2 = (t2gammaterm - t2gammanorm) - (t1gammaterm - t1gammanorm); 
     if (div1<0 || div2<0){
       throw new RuntimeException("invalid variational bound. All divergences should be non-negative, "
           + "but divergence1="+div1+" divergence2="+div2);
