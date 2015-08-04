@@ -62,7 +62,7 @@ public class ClassificationMeasurementModelLabeler implements DatasetLabeler{
     }
     
     ClassificationMeasurementModel.State state = model.getCurrentState();
-    ClassificationMeasurementModelCounts counts = ClassificationMeasurementModelCounts.from(state); 
+    ClassificationMeasurementModelExpectations counts = ClassificationMeasurementModelExpectations.from(state); 
     Dataset data = state.getData();
     
     // corpus predictions 
@@ -86,6 +86,10 @@ public class ClassificationMeasurementModelLabeler implements DatasetLabeler{
     double[][] machineConfusionMatrix = new double[data.getInfo().getNumClasses()][data.getInfo().getNumClasses()];
     // accuracies
     double[] annotatorAccuracies = new double[data.getInfo().getNumAnnotators()];
+    for (int j=0; j<annotatorAccuracies.length; j++){
+      double alpha = state.getNuSigma2()[j][0], beta = state.getNuSigma2()[j][1];
+      annotatorAccuracies[j] = beta / (alpha - 1);
+    }
     double machineAccuracy = -1;
     
     double logJoint = model.lowerBound(counts);

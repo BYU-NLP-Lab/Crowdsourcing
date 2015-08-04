@@ -35,18 +35,18 @@ import edu.byu.nlp.util.Triple;
  * @author plf1
  *
  */
-public class ClassificationMeasurementModelCounts {
+public class ClassificationMeasurementModelExpectations {
 
 //  private Map<Integer, Collection<MeasurementExpectation<Integer>>> measurementsForDocIndex;
   private Map<Integer, Collection<MeasurementExpectation<Integer>>> measurementsForAnnotator;
   private Map<Pair<Integer,Integer>, Collection<MeasurementExpectation<Integer>>> measurementsForAnnotatorAndDocIndex;
   private Map<Triple<Integer,Integer,Integer>, Collection<MeasurementExpectation<Integer>>> measurementsForAnnotatorDocIndexAndClass;
 
-  private ClassificationMeasurementModelCounts() {
+  private ClassificationMeasurementModelExpectations() {
   }
 
-  public static ClassificationMeasurementModelCounts from(State state) {
-    ClassificationMeasurementModelCounts updater = new ClassificationMeasurementModelCounts();
+  public static ClassificationMeasurementModelExpectations from(State state) {
+    ClassificationMeasurementModelExpectations updater = new ClassificationMeasurementModelExpectations();
     updater.initialize(state.getData(), state.getInstanceIndices(), state.getLogNuY());
     return updater;
   }

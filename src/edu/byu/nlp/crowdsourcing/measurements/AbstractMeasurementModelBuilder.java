@@ -67,7 +67,7 @@ public abstract class AbstractMeasurementModelBuilder {
   
   public static class StaticMeasurementModelCounts{
     private Counter<Integer> annotatorMeasurementCounter;
-    private double logLowerBoundConstant;
+    private double logLowerBoundConstant, logQThetaNormalizer, logQTauWNormalizer;
     public StaticMeasurementModelCounts (Dataset data, PriorSpecification priors){
       initialize(data, priors);
     }
@@ -83,6 +83,13 @@ public abstract class AbstractMeasurementModelBuilder {
     public double getLogLowerBoundConstant(){
       return logLowerBoundConstant;
     }
+    public double getQThetaNormalizer(){
+      return logQThetaNormalizer;
+    }
+    public double getQTauWNormalizer(){
+      return logQTauWNormalizer;
+    }      
+    
     
     private void initialize(Dataset data, PriorSpecification priors){
       annotatorMeasurementCounter = new DenseCounter(data.getInfo().getNumAnnotators());
@@ -95,14 +102,14 @@ public abstract class AbstractMeasurementModelBuilder {
       // lower bound constant
       double priorAlpha = priors.getBGamma(), priorBeta = priors.getCGamma(), priorDelta = priors.getBTheta(); // shoe-horned inverse gamma prior values
       
-      double lbterm1 = - GammaFunctions.logBetaSymmetric(priorDelta,data.getInfo().getNumClasses());
-      double lbterm2 = data.getInfo().getNumAnnotators() * priorAlpha * Math.log(priorBeta);
-      double lbterm3 = - data.getInfo().getNumAnnotators() * Gamma.logGamma(priorAlpha);
-      double lbterm4 = 0;
+      logQThetaNormalizer = -1 * GammaFunctions.logBetaSymmetric(priorDelta,data.getInfo().getNumClasses());
+      logQTauWNormalizer = 0;
+      logQTauWNormalizer += data.getInfo().getNumAnnotators() * ((priorAlpha * Math.log(priorBeta)) - Gamma.logGamma(priorAlpha));
       for (int j=0; j<data.getInfo().getNumAnnotators(); j++){
-        lbterm4 -= ((annotatorMeasurementCounter.getCount(j)/2.0) * Math.log(2.0*Math.PI));
+        logQTauWNormalizer -= ((annotatorMeasurementCounter.getCount(j)/2.0) * Math.log(2.0*Math.PI));
       }
-      logLowerBoundConstant = lbterm1 + lbterm2 + lbterm3 + lbterm4;
+      
+      logLowerBoundConstant = logQThetaNormalizer + logQTauWNormalizer;
     }
   }
   

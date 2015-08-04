@@ -18,7 +18,7 @@ public interface ClassificationMeasurementModel extends SupportsTrainingOperatio
   
   Map<String,Integer> getInstanceIndices();
 
-  double lowerBound(ClassificationMeasurementModelCounts counts);
+  double lowerBound(ClassificationMeasurementModelExpectations counts);
 
   double[] fitOutOfCorpusInstance(DatasetInstance instance);
   
