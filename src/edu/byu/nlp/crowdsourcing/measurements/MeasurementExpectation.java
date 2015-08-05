@@ -67,11 +67,11 @@ public interface MeasurementExpectation<L> {
    * the entire expectation each time a single element changes. 
    */
   void setLogNuY_i(int docIndex, double[] logNuY_i);
-  
+
   /**
    * The value of E_y[sum_i feature(x_i,y)] wrt the approximate distribution q(y)
    */
-  double expectedValue();
+  double sumOfExpectedValuesOfSigma();
 
   /**
    * Each expectation consists of a sum of terms 
@@ -79,5 +79,15 @@ public interface MeasurementExpectation<L> {
    * the ith term participates in the overall sum
    */
   void setSummandVisible(int i, boolean visible);
+
+  /**
+   * 
+   */
+  double sumOfExpectedValuesOfSquaredSigma();
+
+  /**
+   * 
+   */
+  double piecewiseSquaredSumOfExpectedValuesOfSigma();
   
 }

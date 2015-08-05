@@ -40,7 +40,9 @@ public class ClassificationMeasurementExpectations {
   private static final Logger logger = LoggerFactory.getLogger(ClassificationMeasurementExpectations.class);
   
   public static abstract class AbstractExpectation implements MeasurementExpectation<Integer>{
-    
+
+    private MutableSum piecewiseSquaredExpectation = new MutableSum();
+    private MutableSum expectationOfSquaredSigmas = new MutableSum();
     private MutableSum expectation = new MutableSum();
     private Measurement measurement;
     private Dataset dataset;
@@ -59,11 +61,13 @@ public class ClassificationMeasurementExpectations {
     }
     @Override
     public void setLogNuY_i(int docIndex, double[] logNuY_i) {
-      expectation.setSummand(docIndex, expectedValue_i(docIndex, logNuY_i));
-      
+      double expectedValue = expectedValue_i(docIndex, logNuY_i);
+      expectation.setSummand(docIndex, expectedValue);
+      piecewiseSquaredExpectation.setSummand(docIndex, Math.pow(expectedValue, 2));
+      expectationOfSquaredSigmas.setSummand(docIndex, expectedValueOfSquaredSigma_i(docIndex, logNuY_i));
     }
     @Override
-    public double expectedValue() {
+    public double sumOfExpectedValuesOfSigma() {
       return expectation.getSum();
     }
     @Override
@@ -79,6 +83,17 @@ public class ClassificationMeasurementExpectations {
       return MoreObjects.toStringHelper(MeasurementExpectation.class)
           .add("meas",getMeasurement())
           .toString();
+    }
+    @Override
+    public double sumOfExpectedValuesOfSquaredSigma() {
+      return expectationOfSquaredSigmas.getSum();
+    }
+    @Override
+    public double piecewiseSquaredSumOfExpectedValuesOfSigma() {
+      return piecewiseSquaredExpectation.getSum();
+    }
+    protected double expectedValueOfSquaredSigma_i(int docIndex, double[] logNuY_i) {
+      return expectedValue_i(docIndex, logNuY_i);
     }
     protected abstract double expectedValue_i(int docIndex, double[] logNuY_i);
   }
