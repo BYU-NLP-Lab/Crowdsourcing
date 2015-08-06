@@ -7,13 +7,17 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.common.base.MoreObjects;
+import com.google.common.collect.Range;
 import com.google.common.collect.Sets;
 
 import edu.byu.nlp.crowdsourcing.measurements.MeasurementExpectation;
 import edu.byu.nlp.data.measurements.ClassificationMeasurements.BasicClassificationLabelProportionMeasurement;
+import edu.byu.nlp.data.measurements.ClassificationMeasurements.BasicClassificationLabeledPredicateMeasurement;
 import edu.byu.nlp.data.measurements.ClassificationMeasurements.ClassificationAnnotationMeasurement;
+import edu.byu.nlp.data.measurements.ClassificationMeasurements.ClassificationLabeledPredicateMeasurement;
 import edu.byu.nlp.data.measurements.ClassificationMeasurements.ClassificationProportionMeasurement;
 import edu.byu.nlp.data.types.Dataset;
+import edu.byu.nlp.data.types.DatasetInstance;
 import edu.byu.nlp.data.types.Measurement;
 import edu.byu.nlp.stats.MutableSum;
 import edu.byu.nlp.util.IntArrays;
@@ -123,6 +127,10 @@ public class ClassificationMeasurementExpectations {
     public ClassificationProportionMeasurement getClassificationMeasurement(){
       return (ClassificationProportionMeasurement) getMeasurement();
     }
+    @Override
+    public Range<Double> getRange() {
+      return Range.closed(0.0, (double)getDataset().getInfo().getNumDocuments());
+    }
   }
   
   
@@ -156,8 +164,67 @@ public class ClassificationMeasurementExpectations {
     public ClassificationAnnotationMeasurement getClassificationMeasurement(){
       return (ClassificationAnnotationMeasurement) getMeasurement();
     }
+    @Override
+    public Range<Double> getRange() {
+      return Range.closed(0.0, 1.0);
+    }
   }
  
+
+  public static class LabeledPredicate extends AbstractExpectation{
+    private Set<Integer> dependentIndices;
+    private int label;
+    private int wordCount;
+    private Map<String, Integer> documentIndices;
+    private String predicate;
+    public LabeledPredicate(ClassificationLabeledPredicateMeasurement measurement, Dataset dataset, Map<String, Integer> documentIndices) {
+      super((Measurement) measurement, dataset);
+      this.label = measurement.getLabel();
+      this.documentIndices=documentIndices;
+      this.predicate=measurement.getPredicate();
+    }
+    @Override
+    public double featureValue(int docIndex, Integer label) {
+      if (!getDependentIndices().contains(docIndex)){
+        logger.error("DANGER! LabeledPredicate is being asked for indices that it doesn't depend on! This is VERY slow and probably a bug!!!");
+        return 0;
+      }
+      return label==this.label? 1: 0;
+    }
+    @Override
+    public Range<Double> getRange() {
+      calculateDependentIndices();
+      return Range.closed(0.0, (double)wordCount);
+    }
+    @Override
+    public Set<Integer> getDependentIndices() {
+      calculateDependentIndices();
+      return dependentIndices;
+    }
+    @Override
+    protected double expectedValue_i(int docIndex, double[] logNuY_i) {
+      return logNuY_i[label];
+    }
+    private void calculateDependentIndices(){
+      if (dependentIndices==null){
+        this.dependentIndices = Sets.newHashSet();
+        Integer wordIndex = getDataset().getInfo().getFeatureIndexer().indexOf(predicate);
+        // unknown word
+        if (wordIndex==null){
+          throw new IllegalStateException("Tried to add a predicate (word) that was not found in the corpus! This should never happen!");
+        }
+        
+        this.wordCount = 0;
+        for (DatasetInstance instance: getDataset()){
+          Double localWordCount = instance.asFeatureVector().getValue(wordIndex);
+          if (localWordCount!=null){
+            dependentIndices.add(documentIndices.get(instance.getInfo().getRawSource()));
+            this.wordCount += localWordCount;
+          }
+        }
+      }
+    }
+  }
   
   public static MeasurementExpectation<Integer> fromMeasurement(Measurement measurement, Dataset dataset, Map<String,Integer> documentIndices, double[][] logNuY){
     MeasurementExpectation<Integer> expectation;
@@ -171,6 +238,10 @@ public class ClassificationMeasurementExpectations {
       expectation = new ClassificationMeasurementExpectations.LabelProportion(
           (ClassificationProportionMeasurement) measurement, dataset);
     }
+    else if (measurement instanceof BasicClassificationLabeledPredicateMeasurement){
+      expectation = new ClassificationMeasurementExpectations.LabeledPredicate(
+          (ClassificationLabeledPredicateMeasurement) measurement, dataset, documentIndices);
+    }
     else{
       throw new IllegalArgumentException("unknown measurement type: "+measurement.getClass().getName());
     }
@@ -182,6 +253,63 @@ public class ClassificationMeasurementExpectations {
     
     return expectation;
     
+  }
+  
+  public static class ScaledMeasurementExpectation<L> implements MeasurementExpectation<L>{
+    private MeasurementExpectation<L> delegate;
+    private double rangeMagnitude, rangeMagnitudeSquared;
+    public static <L> ScaledMeasurementExpectation<L> from(MeasurementExpectation<L> delegate){
+      return new ScaledMeasurementExpectation<L>(delegate);
+    }
+    public ScaledMeasurementExpectation(MeasurementExpectation<L> delegate){
+      this.delegate=delegate;
+      this.rangeMagnitude=delegate.getRange().upperEndpoint() - delegate.getRange().lowerEndpoint();
+      this.rangeMagnitudeSquared = Math.pow(rangeMagnitude, 2);
+    }
+    @Override
+    public Dataset getDataset() {
+      return delegate.getDataset();
+    }
+    @Override
+    public Measurement getMeasurement() {
+      return delegate.getMeasurement();
+    }
+    @Override
+    public int getAnnotator() {
+      return delegate.getAnnotator();
+    }
+    @Override
+    public double featureValue(int docIndex, L label) {
+      return delegate.featureValue(docIndex, label) / rangeMagnitude;
+    }
+    @Override
+    public Range<Double> getRange() {
+      return delegate.getRange();
+    }
+    @Override
+    public Set<Integer> getDependentIndices() {
+      return delegate.getDependentIndices();
+    }
+    @Override
+    public void setLogNuY_i(int docIndex, double[] logNuY_i) {
+      delegate.setLogNuY_i(docIndex, logNuY_i);
+    }
+    @Override
+    public double sumOfExpectedValuesOfSigma() {
+      return delegate.sumOfExpectedValuesOfSigma() / rangeMagnitude;
+    }
+    @Override
+    public void setSummandVisible(int i, boolean visible) {
+      delegate.setSummandVisible(i, visible);
+    }
+    @Override
+    public double sumOfExpectedValuesOfSquaredSigma() {
+      return delegate.sumOfExpectedValuesOfSquaredSigma() / rangeMagnitudeSquared;
+    }
+    @Override
+    public double piecewiseSquaredSumOfExpectedValuesOfSigma() {
+      return delegate.piecewiseSquaredSumOfExpectedValuesOfSigma() / rangeMagnitudeSquared;
+    }
   }
   
 }

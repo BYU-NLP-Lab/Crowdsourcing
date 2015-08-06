@@ -2,6 +2,8 @@ package edu.byu.nlp.crowdsourcing.measurements;
 
 import java.util.Set;
 
+import com.google.common.collect.Range;
+
 import edu.byu.nlp.data.types.Dataset;
 import edu.byu.nlp.data.types.Measurement;
 
@@ -51,6 +53,11 @@ public interface MeasurementExpectation<L> {
    * algorithmic computation. 
    */
   double featureValue(int docIndex, L label);
+
+  /**
+   * What is the range of values that this expectation could possibly take on? 
+   */
+  Range<Double> getRange();
   
   /**
    * Many measurements depend on only a single data instance 
@@ -69,7 +76,7 @@ public interface MeasurementExpectation<L> {
   void setLogNuY_i(int docIndex, double[] logNuY_i);
 
   /**
-   * The value of E_y[sum_i feature(x_i,y)] wrt the approximate distribution q(y)
+   * The value of sum_i E_y[feature(x_i,y)] wrt the approximate distribution q(y)
    */
   double sumOfExpectedValuesOfSigma();
 
@@ -81,12 +88,12 @@ public interface MeasurementExpectation<L> {
   void setSummandVisible(int i, boolean visible);
 
   /**
-   * 
+   * The value of sum_i E_y[feature(x_i,y)^2] wrt the approximate distribution q(y)
    */
   double sumOfExpectedValuesOfSquaredSigma();
 
   /**
-   * 
+   * The value of sum_i E_y[ feature(x_i,y)]^2 wrt the approximate distribution q(y)
    */
   double piecewiseSquaredSumOfExpectedValuesOfSigma();
   

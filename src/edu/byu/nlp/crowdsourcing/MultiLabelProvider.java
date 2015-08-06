@@ -20,5 +20,5 @@ package edu.byu.nlp.crowdsourcing;
  *
  */
 public interface MultiLabelProvider<D,L> {
-  Iterable<L> labelFor(int source, D datum);
+  Iterable<L> labelFor(String source, D datum);
 }

@@ -92,14 +92,18 @@ public class ClassificationMeasurementModelExpectations {
 
       // initialize each measurement expectation with the data (and index it for easy lookup)
       for (DatasetInstance item : dataset) {
-        int docIndex = instanceIndices.get(item.getInfo().getRawSource());
         for (Measurement measurement : item.getAnnotations().getMeasurements()) {
           ClassificationMeasurement cmeas = (ClassificationMeasurement)measurement;
           MeasurementExpectation<Integer> expectation = ClassificationMeasurementExpectations.fromMeasurement(measurement, dataset, instanceIndices, logNuY);
-//          perDocIndex.put(docIndex, expectation);
-          perAnnotator.put(measurement.getAnnotator(), expectation);
-          perAnnotatorAndDocIndex.put(Pair.of(measurement.getAnnotator(), docIndex), expectation);
-          perAnnotatorDocIndexAndClass.put(Triple.of(measurement.getAnnotator(), docIndex, cmeas.getLabel()), expectation);
+          // ignore measurements that don't apply to any documents
+          if (expectation.getDependentIndices().size()>0){
+            perAnnotator.put(measurement.getAnnotator(), expectation);
+          }
+          for (Integer docIndex: expectation.getDependentIndices()){
+            perAnnotatorAndDocIndex.put(Pair.of(measurement.getAnnotator(), docIndex), expectation);
+            perAnnotatorDocIndexAndClass.put(Triple.of(measurement.getAnnotator(), docIndex, cmeas.getLabel()), expectation);
+          }
+          
         }
       }
 

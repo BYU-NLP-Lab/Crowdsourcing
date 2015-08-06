@@ -23,6 +23,7 @@ import com.google.common.collect.Multimap;
 import com.google.common.collect.Sets;
 
 import edu.byu.nlp.data.FlatInstance;
+import edu.byu.nlp.data.types.Measurement;
 import edu.byu.nlp.data.util.EmpiricalAnnotations;
 import edu.byu.nlp.dataset.Datasets;
 
@@ -32,20 +33,20 @@ import edu.byu.nlp.dataset.Datasets;
  * @author pfelt
  *
  */
-public class EmpiricalAnnotationProvider<D, L> implements LabelProvider<D, L> {
+public class EmpiricalMeasurementProvider<D> implements LabelProvider<D, Measurement> {
 	
-	private EmpiricalAnnotations<D, L> annotations;
-	private Set<FlatInstance<D, L>> usedAnnotations = Sets.newIdentityHashSet();
+	private EmpiricalAnnotations<D, Integer> annotations;
+	private Set<FlatInstance<D, Integer>> usedAnnotations = Sets.newIdentityHashSet();
   private int annotatorId;
 	
-  public EmpiricalAnnotationProvider(int annotatorId, EmpiricalAnnotations<D, L> annotations) {
+  public EmpiricalMeasurementProvider(int annotatorId, EmpiricalAnnotations<D, Integer> annotations) {
     this.annotatorId=annotatorId;
 		this.annotations = annotations;
 	}
 
 	/** {@inheritDoc} */
 	@Override
-	  public L labelFor(String source, D datum) {
+	  public Measurement labelFor(String source, D datum) {
 	  return nextAnnotation(annotations.getAnnotationsFor(source,datum));
 	}
 
@@ -54,16 +55,16 @@ public class EmpiricalAnnotationProvider<D, L> implements LabelProvider<D, L> {
 	 * constructor. Returns the first annotation for this instance 
 	 * that has not been returned before.  
 	 */
-  private L nextAnnotation(Multimap<Integer, FlatInstance<D, L>> instanceAnnotations) {
+  private Measurement nextAnnotation(Multimap<Integer, FlatInstance<D, Integer>> instanceAnnotations) {
     // return next unused annotation for this annotator
-    List<FlatInstance<D, L>> annotationList = Lists.newArrayList(instanceAnnotations.get(annotatorId));
+    List<FlatInstance<D, Integer>> annotationList = Lists.newArrayList(instanceAnnotations.get(annotatorId));
     Datasets.sortAnnotations(annotationList);
     
-    for (FlatInstance<D, L> ann: annotationList){
+    for (FlatInstance<D, Integer> ann: annotationList){
       if (!usedAnnotations.contains(ann)){
         // return earliest annotation that hasn't already been used
         usedAnnotations.add(ann);
-        return ann.getAnnotation();
+        return ann.getMeasurement();
       }
     }
     return null;

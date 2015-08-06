@@ -22,14 +22,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import cc.mallet.types.Dirichlet;
-
-import com.google.common.base.Preconditions;
-
 import edu.byu.nlp.classify.data.DatasetLabeler;
 import edu.byu.nlp.classify.eval.Predictions;
 import edu.byu.nlp.crowdsourcing.PriorSpecification;
 import edu.byu.nlp.crowdsourcing.measurements.AbstractMeasurementModelBuilder;
 import edu.byu.nlp.crowdsourcing.measurements.MeasurementExpectation;
+import edu.byu.nlp.crowdsourcing.measurements.classification.ClassificationMeasurementExpectations.ScaledMeasurementExpectation;
 import edu.byu.nlp.crowdsourcing.models.meanfield.MeanFieldMultiRespModel;
 import edu.byu.nlp.data.measurements.ClassificationMeasurements.ClassificationAnnotationMeasurement;
 import edu.byu.nlp.data.types.Dataset;
@@ -44,6 +42,7 @@ import edu.byu.nlp.util.Matrices;
  */
 public class BasicClassificationMeasurementModel implements ClassificationMeasurementModel{
   private static final Logger logger = LoggerFactory.getLogger(BasicClassificationMeasurementModel.class);
+  private static boolean SCALE_MEASUREMENTS = true;
 
   private State state;
   private RandomGenerator rnd;  
@@ -149,7 +148,12 @@ public class BasicClassificationMeasurementModel implements ClassificationMeasur
       // error sum
       double errorSum = 0;
       for (MeasurementExpectation<Integer> expectation: counts.getExpectationsForAnnotator(j)){
-        double tau_jk = expectation.getMeasurement().getValue();
+        double tau_jk = expectation.getMeasurement().getValue(); 
+        if (SCALE_MEASUREMENTS){
+          double range = expectation.getRange().upperEndpoint() - expectation.getRange().lowerEndpoint();
+          tau_jk = expectation.getMeasurement().getValue() / range; // scale the observation
+          expectation = ScaledMeasurementExpectation.from(expectation); // scale the expectation quantities
+        }
         
         errorSum += Math.pow(tau_jk, 2);
         errorSum -= 2 * tau_jk * expectation.sumOfExpectedValuesOfSigma();
@@ -183,7 +187,13 @@ public class BasicClassificationMeasurementModel implements ClassificationMeasur
           
           double t4 = 0;
           for (MeasurementExpectation<Integer> expectation: counts.getExpectationsForAnnotatorAndInstance(j, i)){
-            double tau_jk = expectation.getMeasurement().getValue();
+            double tau_jk = expectation.getMeasurement().getValue(); 
+            if (SCALE_MEASUREMENTS){
+              double range = expectation.getRange().upperEndpoint() - expectation.getRange().lowerEndpoint();
+              tau_jk = expectation.getMeasurement().getValue() / range; // scale the observation
+              expectation = ScaledMeasurementExpectation.from(expectation); // scale the expectation quantities
+            }
+            
             double sigma_jk = expectation.featureValue(i, c);
             
             // tau^2
@@ -307,7 +317,12 @@ public class BasicClassificationMeasurementModel implements ClassificationMeasur
       // error sum
       double errorSum = 0;
       for (MeasurementExpectation<Integer> expectation: counts.getExpectationsForAnnotator(j)){
-        double tau_jk = expectation.getMeasurement().getValue();
+        double tau_jk = expectation.getMeasurement().getValue(); 
+        if (SCALE_MEASUREMENTS){
+          double range = expectation.getRange().upperEndpoint() - expectation.getRange().lowerEndpoint();
+          tau_jk = expectation.getMeasurement().getValue() / range; // scale the observation
+          expectation = ScaledMeasurementExpectation.from(expectation); // scale the expectation quantities
+        }
         
         errorSum += Math.pow(tau_jk, 2);
         errorSum -= 2 * tau_jk * expectation.sumOfExpectedValuesOfSigma();
@@ -369,7 +384,7 @@ public class BasicClassificationMeasurementModel implements ClassificationMeasur
     // terms
 //    Preconditions.checkState(-elbo>0, "Sanity test failed! -ELBO is a KL divergence and must be >0");
 //    Preconditions.checkState((part2t1 + part2t2) - expQlogP > 0, "Sanity test failed! All KL divergence and must be >0");
-    Preconditions.checkState(part2t3 - expQlogP > 0, "Sanity test failed! All KL divergence and must be >0");
+//    Preconditions.checkState(part2t3 - expQlogP > 0, "Sanity test failed! All KL divergence and must be >0");
 //    Preconditions.checkState(part2t4 - expQlogP > 0, "Sanity test failed! All KL divergence and must be >0");
     
     return elbo;

@@ -21,5 +21,5 @@ package edu.byu.nlp.crowdsourcing;
  *
  */
 public interface LabelProvider<D, L> {
-	L labelFor(int source, D datum);
+	L labelFor(String source, D datum);
 }
