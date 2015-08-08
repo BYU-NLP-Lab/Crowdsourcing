@@ -74,39 +74,16 @@ public class BasicClassificationMeasurementModel implements ClassificationMeasur
       logger.warn("Ignoring request to maximize "+variableName+". Instead maximizing 'all'");
     }
     
-//    // construct an updated state (without changing the old state yet)
-//    State newstate = state.copy();
-//    ClassificationMeasurementModelExpectations expectations = ClassificationMeasurementModelExpectations.from(newstate);
-//    System.out.println("LB after initialization: "+lowerBound(newstate,expectations));
-//    fitNuTheta(newstate.getNuTheta());
-//    System.out.println("LB after fitNuTheta: "+lowerBound(newstate,expectations));
-//    fitNuSigma2(newstate.getNuSigma2(), expectations);
-//    System.out.println("LB after fitNuSigma2: "+lowerBound(newstate,expectations));
-//    fitLogNuY(newstate.getLogNuY(), expectations);
-////    fitLogNuYDebug(newstate.getLogNuY(), expectations);
-//
-//    // swap in new state all at once
-//    this.state = newstate;
-//    expectations = ClassificationMeasurementModelExpectations.from(this.state); // have to update this since nuY changed
-//    System.out.println("LB after fitLogNuY: "+lowerBound(state,expectations));
-//    
-//    System.out.println("nuTheta="+DoubleArrays.toString(newstate.getNuTheta()));
-//    System.out.println("nuSigma2="+Matrices.toString(newstate.getNuSigma2()));
-//    System.out.println("logNuY: "+DoubleArrays.toString(state.getLogNuY()[0]));
-
-    // construct an updated state (without changing the old state yet)
+    // update the state in place, variable by variable 
     ClassificationMeasurementModelExpectations expectations = ClassificationMeasurementModelExpectations.from(state);
     System.out.println("LB after initialization: "+lowerBound(state,expectations));
-    fitNuTheta(state.getNuTheta());
+    fitNuTheta(state);
     System.out.println("LB after fitNuTheta: "+lowerBound(state,expectations));
-    fitNuSigma2(state.getNuSigma2(), expectations);
+    fitNuSigma2(state, expectations);
     System.out.println("LB after fitNuSigma2: "+lowerBound(state,expectations));
-//    fitLogNuY(state.getLogNuY(), expectations);
-//    fitLogNuYDebug(state.getLogNuY(), expectations);
-//    fitLogNuYDebugInPlace(state.getLogNuY(), expectations);
-    fitLogNuYInPlace(expectations);
+    fitLogNuY(state, expectations);
   
-    expectations = ClassificationMeasurementModelExpectations.from(this.state); // have to update this since nuY changed
+//    expectations = ClassificationMeasurementModelExpectations.from(this.state); // have to update this since nuY changed
     System.out.println("LB after fitLogNuY: "+lowerBound(state,expectations));
     
     System.out.println("nuTheta="+DoubleArrays.toString(state.getNuTheta()));
@@ -131,8 +108,8 @@ public class BasicClassificationMeasurementModel implements ClassificationMeasur
   /* ***** Parameter Optimization ********* */
   /* ************************************** */
 
-  private void fitNuTheta(double[] nuTheta) {
-    
+  private void fitNuTheta(State state) {
+    double[] nuTheta = state.getNuTheta();
     double[] classCounts = Matrices.sumOverFirst(Matrices.exp(state.getLogNuY()));
     
     for (int c=0; c<state.getNumClasses(); c++){
@@ -144,26 +121,9 @@ public class BasicClassificationMeasurementModel implements ClassificationMeasur
   }
 
 
-//  private void fitNuSigma2(double[][] nuSigma2, ClassificationMeasurementModelExpectations counts) {
-//    // alpha is shoe-horned into priors.bgamma; beta into priors.cgamma
-//    double priorAlpha = state.getPriors().getBGamma(), priorBeta = state.getPriors().getCGamma();
-//    for (int j=0; j<state.getNumAnnotators(); j++){
-//      // each inverse gamma distributed sigma2_j has two variational parameters: shape (nuSigma2[j][0]) and scale (nuSigma2[j][1]).
-//
-//      // variational posterior shape parameter
-//      nuSigma2[j][0] = (state.getStaticCounts().getPerAnnotatorMeasurements().getCount(j) / 2.0) + priorAlpha;
-//      
-//      // variational posterior scale parameter
-//      double summedExpectationError = 0;
-//      for (MeasurementExpectation<Integer> expectation: counts.getExpectationsForAnnotator(j)){
-//        summedExpectationError += Math.pow(expectation.getMeasurement().getValue() - expectation.sumOfExpectedValuesOfSigma(), 2);
-//      }
-//      
-//      nuSigma2[j][1] = priorBeta + (0.5 * summedExpectationError); 
-//    }
-//  }
-  
-  private void fitNuSigma2(double[][] nuSigma2, ClassificationMeasurementModelExpectations expectations) {
+  private void fitNuSigma2(State state, ClassificationMeasurementModelExpectations expectations) {
+    double[][] nuSigma2 = state.getNuSigma2();
+    
     // alpha is shoe-horned into priors.bgamma; beta into priors.cgamma
     double priorAlpha = state.getPriors().getBGamma(), priorBeta = state.getPriors().getCGamma();
     for (int j=0; j<state.getNumAnnotators(); j++){
@@ -195,218 +155,13 @@ public class BasicClassificationMeasurementModel implements ClassificationMeasur
   }
 
 
-  private void fitLogNuYDebugInPlace(double[][] logNuY, ClassificationMeasurementModelExpectations unused) {
-    int numdocs = logNuY.length, numclasses = logNuY[0].length;
-    
-    for (int i=0; i<numdocs; i++){
-      double[] newLogNuY = new double[state.getNumClasses()];
-      
-      // set logNuY by setting point distributions over p(y_i) for each c in turn
-      // and evaluating the lower bound
-      for (int c=0; c<numclasses; c++){
-        // set point distribution (in log space)
-        for (int cc=0; cc<numclasses; cc++){
-          state.getLogNuY()[i][cc] = cc==c? 1: 0;
-        }
-        DoubleArrays.logToSelf(state.getLogNuY()[i]);
-        
-        // eval E_q[log p]
-        ClassificationMeasurementModelExpectations recalculatedExpectations = ClassificationMeasurementModelExpectations.from(state);
-        newLogNuY[c] = expectedLogP(state,recalculatedExpectations);
-        
-      }
-      DoubleArrays.logNormalizeToSelf(newLogNuY);
-      
-      // update state
-      for (int c=0; c<numclasses; c++){
-        state.getLogNuY()[i][c] = newLogNuY[c];
-      }
-    }
-  }
-
-
-  private void fitLogNuYDebug(double[][] logNuY, ClassificationMeasurementModelExpectations unused) {
-    int numdocs = logNuY.length, numclasses = logNuY[0].length;
-    
-    for (int i=0; i<numdocs; i++){
-      // freeze original state
-      double[] orig = state.getLogNuY()[i].clone();
-      
-      // set logNuY by setting point distributions over p(y_i) for each c in turn
-      // and evaluating the lower bound
-      for (int c=0; c<numclasses; c++){
-        // set point distribution (in log space)
-        for (int cc=0; cc<numclasses; cc++){
-          state.getLogNuY()[i][cc] = cc==c? 1: 0;
-        }
-        DoubleArrays.logToSelf(state.getLogNuY()[i]);
-        
-        // eval E_q[log p]
-        ClassificationMeasurementModelExpectations recalculatedExpectations = ClassificationMeasurementModelExpectations.from(state);
-        logNuY[i][c] = expectedLogP(state,recalculatedExpectations);
-        
-      }
-      DoubleArrays.logNormalizeToSelf(logNuY[i]);
-      
-      // restore original state
-      for (int c=0; c<numclasses; c++){
-        state.getLogNuY()[i][c] = orig[c];
-      }
-    }
-  }
-
-
-  private void fitLogNuY(double[][] logNuY, ClassificationMeasurementModelExpectations expectations) {
-    // pre-calculate
-    double[] digammaOfNuThetas = MeanFieldMultiRespModel.digammasOfArray(state.getNuTheta());
-    double digammaOfSummedNuThetas = MeanFieldMultiRespModel.digammaOfSummedArray(state.getNuTheta());
-    
-
-//    for (MeasurementExpectation<Integer> expectation: counts.getExpectationsForAnnotatorAndInstance(1, 0)){
-//      System.out.println(
-//      MoreObjects.toStringHelper(this.getClass())
-//        .add("annotator", expectation.getAnnotator())
-//        .add("label", ((ClassificationMeasurement) expectation.getMeasurement()).getLabel())
-//        .add("value", expectation.getMeasurement().getValue())
-//        .add("expected", expectation.sumOfExpectedValuesOfSigma())
-//        .add("expected^2", expectation.sumOfExpectedValuesOfSquaredSigma())
-//        .add("expected^2^2", expectation.piecewiseSquaredSumOfExpectedValuesOfSigma())
-//        .add("range", expectation.getRange()).toString()
-//        );
-//      double a=3;
-//    }
-//    System.out.println("size10="+counts.getExpectationsForAnnotatorAndInstance(1, 0).size());
-//    System.out.println("size11="+counts.getExpectationsForAnnotatorAndInstance(1, 1).size());
-//    System.out.println("size12="+counts.getExpectationsForAnnotatorAndInstance(1, 2).size());
-//    System.out.println("size20="+counts.getExpectationsForAnnotatorAndInstance(2, 0).size());
-//    System.out.println("size21="+counts.getExpectationsForAnnotatorAndInstance(2, 1).size());
-//    System.out.println("size22="+counts.getExpectationsForAnnotatorAndInstance(2, 2).size());
-    
-    for (int i=0; i<state.getNumDocuments(); i++){
-      double[] form1 = new double[state.getNumClasses()];
-      double[] form2 = new double[state.getNumClasses()];
-      for (int c=0; c<state.getNumClasses(); c++){
-        // part 1 (identical to first part of meanfielditemresp.fitg
-        double t1 = digammaOfNuThetas[c] - digammaOfSummedNuThetas;
-        
-        double t2 = 0, t2alt = 0;
-        for (int j=0; j<state.getNumAnnotators(); j++){
-          double postAlpha = state.getNuSigma2()[j][0], postBeta = state.getNuSigma2()[j][1];
-          
-          double t3 = postAlpha / (2 * postBeta);
-          
-          double t4 = 0;
-          for (MeasurementExpectation<Integer> expectation: expectations.getExpectationsForAnnotatorInstanceAndLabel(j, i, c)){
-//            for (MeasurementExpectation<Integer> expectation: counts.getExpectationsForAnnotatorAndInstance(j, i)){
-            double error = 0;
-            Integer rawLabel = ((ClassificationMeasurement)expectation.getMeasurement()).getLabel();
-            
-            double tau_jk = expectation.getMeasurement().getValue(); 
-            if (SCALE_MEASUREMENTS){
-              double range = expectation.getRange().upperEndpoint() - expectation.getRange().lowerEndpoint();
-              tau_jk = expectation.getMeasurement().getValue() / range; // scale the observation
-              expectation = ScaledMeasurementExpectation.from(expectation); // scale the expectation quantities
-            }
-            
-            double sigma_jk = expectation.featureValue(i, c);
-            
-            // -2 tau sigma(x,y)
-            error -= 2 * tau_jk * sigma_jk;
-            
-            // sigma^2
-            error += Math.pow(sigma_jk, 2);
-            
-            // 2 sigma sum_i!=i E[sigma]
-            expectation.setSummandVisible(i, false);
-            error += 2 * sigma_jk * expectation.sumOfExpectedValuesOfSigma();
-            expectation.setSummandVisible(i, true);
-            
-            t4 += error;
-          }
-
-//          double t4alt = 0;
-//          for (MeasurementExpectation<Integer> expectation: counts.getExpectationsForAnnotatorAndInstance(j, i)){
-//            double error = 0;
-//            
-//            double tau_jk = expectation.getMeasurement().getValue(); 
-//            if (SCALE_MEASUREMENTS){
-//              double range = expectation.getRange().upperEndpoint() - expectation.getRange().lowerEndpoint();
-//              tau_jk = expectation.getMeasurement().getValue() / range; // scale the observation
-//              expectation = ScaledMeasurementExpectation.from(expectation); // scale the expectation quantities
-//            }
-//            
-//            double sigma_jk = expectation.featureValue(i, c);
-//            
-//            // -2 tau sigma(x,y)
-//            error -= 2 * tau_jk * sigma_jk;
-//
-//            for (int n=0; n<state.getNumDocuments(); n++){
-//              for (int m=0; m<state.getNumDocuments(); m++){
-//                if (n!=i && m!=i){
-//                  continue;
-//                }
-//                if (n==m){
-//                  error += Math.pow(sigma_jk,2);
-//                }
-//                else{
-//                  double first = (n==i)? sigma_jk: expectation.getExpectedValue(n);
-//                  double second = (m==i)? sigma_jk: expectation.getExpectedValue(m);
-//                  error += first*second;
-//                }
-//              }
-//            }
-//            
-//            t4alt += error;
-//          }
-            
-//          // error sum
-//          double t4alt = 0;
-//          for (MeasurementExpectation<Integer> expectation: counts.getExpectationsForAnnotatorAndInstance(j, i)){
-//            double tau_jk = expectation.getMeasurement().getValue(); 
-//            if (SCALE_MEASUREMENTS){
-//              double range = expectation.getRange().upperEndpoint() - expectation.getRange().lowerEndpoint();
-//              tau_jk = expectation.getMeasurement().getValue() / range; // scale the observation
-//              expectation = ScaledMeasurementExpectation.from(expectation); // scale the expectation quantities
-//            }
-//            
-//            t4alt += Math.pow(tau_jk, 2);
-//            t4alt -= 2 * tau_jk * expectation.sumOfExpectedValuesOfSigma();
-//            t4alt += Math.pow(expectation.sumOfExpectedValuesOfSigma(), 2);
-//            t4alt -= expectation.piecewiseSquaredSumOfExpectedValuesOfSigma();
-//            t4alt += expectation.sumOfExpectedValuesOfSquaredSigma();
-//            
-//            expectation.setSummandVisible(i, false);
-//            t4alt -= 2 * expectation.getExpectedValue(i) * expectation.sumOfExpectedValuesOfSigma();
-//            t4alt -= Math.pow(expectation.getExpectedValue(i), 2);
-//            t4alt += 2 * expectation.featureValue(i, c) * expectation.sumOfExpectedValuesOfSigma();
-//            t4alt += Math.pow(expectation.featureValue(i, c), 2);
-//            expectation.setSummandVisible(i, true);
-//          }
-          
-          t2 -= t3*t4;
-//          t2alt -= t3*t4alt;
-        }
-
-        logNuY[i][c] = t1 + t2; 
-        
-        form1[c] = t2;
-        form2[c] = t2alt;
-      }
-      DoubleArrays.logNormalizeToSelf(form1);
-      DoubleArrays.logNormalizeToSelf(form2);
-//      System.out.println("");
-    }
-    Matrices.logNormalizeRowsToSelf(logNuY);
-    System.out.println("");
-  }
-  
-  private void fitLogNuYInPlace(ClassificationMeasurementModelExpectations unused) {
+  private void fitLogNuY(State state, ClassificationMeasurementModelExpectations expectations) {
     // pre-calculate
     double[] digammaOfNuThetas = MeanFieldMultiRespModel.digammasOfArray(state.getNuTheta());
     double digammaOfSummedNuThetas = MeanFieldMultiRespModel.digammaOfSummedArray(state.getNuTheta());
     
     for (int i=0; i<state.getNumDocuments(); i++){
-      ClassificationMeasurementModelExpectations expectations = ClassificationMeasurementModelExpectations.from(state);
+//      ClassificationMeasurementModelExpectations expectations = ClassificationMeasurementModelExpectations.from(state);
       
       for (int c=0; c<state.getNumClasses(); c++){
         // part 1 (identical to first part of meanfielditemresp.fitg
@@ -453,40 +208,10 @@ public class BasicClassificationMeasurementModel implements ClassificationMeasur
         
       }
       DoubleArrays.logNormalizeToSelf(state.getLogNuY()[i]);
+      expectations.updateLogNuY_i(i, state.getLogNuY()[i]);
     }
   }
 
-//  private void fitLogNuY(double[][] logNuY, ClassificationMeasurementModelExpectations counts) {
-//    // pre-calculate
-//    double[] digammaOfNuThetas = MeanFieldMultiRespModel.digammasOfArray(state.getNuTheta());
-//    double digammaOfSummedNuThetas = MeanFieldMultiRespModel.digammaOfSummedArray(state.getNuTheta());
-//    
-//    for (int i=0; i<state.getNumDocuments(); i++){
-//      for (int c=0; c<state.getNumClasses(); c++){
-//        // part 1 (identical to first part of meanfielditemresp.fitg
-//        double t1 = digammaOfNuThetas[c] - digammaOfSummedNuThetas;
-//        
-//        double t2 = 0;
-//        for (int j=0; j<state.getNumAnnotators(); j++){
-//          double postAlpha = state.getNuSigma2()[j][0], postBeta = state.getNuSigma2()[j][1];
-//          double t3 = postAlpha / (2 * postBeta);
-//          double t4 = 0;
-//          for (MeasurementExpectation<Integer> expectation: counts.getExpectationsForAnnotatorAndInstance(j, i)){
-//            expectation.setSummandVisible(i, false);
-//            double error = expectation.getMeasurement().getValue() - expectation.expectedValue() - expectation.featureValue(i, c);
-//            expectation.setSummandVisible(i, true);
-//            t4 += Math.pow(error, 2);
-//          }
-//          
-//          t2 -= t3*t4;
-//        }
-//
-//        logNuY[i][c] = t1 + t2; 
-//        
-//      }
-//    }
-//    Matrices.logNormalizeRowsToSelf(logNuY);
-//  }
 
 
   public double lowerBound(ClassificationMeasurementModelExpectations expectations) {
@@ -700,9 +425,9 @@ public class BasicClassificationMeasurementModel implements ClassificationMeasur
     Matrices.logNormalizeRowsToSelf(state.getLogNuY());
     
     // now set theta and sigma2 by fit
-    ClassificationMeasurementModelExpectations counts = ClassificationMeasurementModelExpectations.from(state);
-    fitNuTheta(state.getNuTheta());
-    fitNuSigma2(state.getNuSigma2(), counts);
+    ClassificationMeasurementModelExpectations expectations = ClassificationMeasurementModelExpectations.from(state);
+    fitNuTheta(state);
+    fitNuSigma2(state, expectations);
     
   }
 

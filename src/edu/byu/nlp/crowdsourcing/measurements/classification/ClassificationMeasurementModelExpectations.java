@@ -37,6 +37,7 @@ import edu.byu.nlp.util.Triple;
  */
 public class ClassificationMeasurementModelExpectations {
 
+  private Map<Integer, Collection<MeasurementExpectation<Integer>>> measurementsForDocIndex;
   private Map<Integer, Collection<MeasurementExpectation<Integer>>> measurementsForAnnotator;
   private Map<Pair<Integer,Integer>, Collection<MeasurementExpectation<Integer>>> measurementsForAnnotatorAndDocIndex;
   private Map<Triple<Integer, Integer,Integer>, Collection<MeasurementExpectation<Integer>>> measurementsForAnnotatorDocIndexAndLabel;
@@ -73,6 +74,7 @@ public class ClassificationMeasurementModelExpectations {
     if (measurementsForAnnotator == null) {
 
       // multimaps
+      Multimap<Integer, MeasurementExpectation<Integer>> perDocIndex = ArrayListMultimap.create();
       Multimap<Integer, MeasurementExpectation<Integer>> perAnnotator = ArrayListMultimap.create();
       Multimap<Pair<Integer,Integer>, MeasurementExpectation<Integer>> perAnnotatorAndDocIndex = ArrayListMultimap.create(); 
       Multimap<Triple<Integer, Integer,Integer>, MeasurementExpectation<Integer>> perAnnotatorDocIndexAndLabel = ArrayListMultimap.create();
@@ -88,6 +90,7 @@ public class ClassificationMeasurementModelExpectations {
           }
           perAnnotator.put(measurement.getAnnotator(), expectation);
           for (Integer docIndex: expectation.getDependentIndices()){
+            perDocIndex.put(docIndex, expectation);
             perAnnotatorAndDocIndex.put(Pair.of(measurement.getAnnotator(), docIndex), expectation);
             perAnnotatorDocIndexAndLabel.put(Triple.of(measurement.getAnnotator(), docIndex, label), expectation);
           }
@@ -98,8 +101,19 @@ public class ClassificationMeasurementModelExpectations {
       measurementsForAnnotator = perAnnotator.asMap();
       measurementsForAnnotatorAndDocIndex = perAnnotatorAndDocIndex.asMap();
       measurementsForAnnotatorDocIndexAndLabel = perAnnotatorDocIndexAndLabel.asMap();
+      measurementsForDocIndex = perDocIndex.asMap();
     }
 
+  }
+
+  /**
+   * Signal that logNuY_i has changed, and update all expectations
+   * that depend on this doc
+   */
+  public void updateLogNuY_i(int docIndex, double[] logNuY_i) {
+    for (MeasurementExpectation<Integer> expectation: measurementsForDocIndex.get(docIndex)){
+      expectation.setLogNuY_i(docIndex, logNuY_i);
+    }
   }
 
 }
