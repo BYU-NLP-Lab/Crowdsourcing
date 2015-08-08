@@ -11,6 +11,7 @@ import edu.byu.nlp.crowdsourcing.PriorSpecification;
 import edu.byu.nlp.crowdsourcing.measurements.AbstractMeasurementModelBuilder.StaticMeasurementModelCounts;
 import edu.byu.nlp.data.types.Dataset;
 import edu.byu.nlp.data.types.DatasetInstance;
+import edu.byu.nlp.util.Matrices;
 
 public interface ClassificationMeasurementModel extends SupportsTrainingOperations{
 
@@ -150,10 +151,10 @@ public interface ClassificationMeasurementModel extends SupportsTrainingOperatio
       .setData(data)
       .setInstanceIndices(instanceIndices)
       .setPriors(priors)
-      .setNuSigma2(nuSigma2)
+      .setNuSigma2(Matrices.clone(nuSigma2))
       .setStaticCounts(staticCounts)
-      .setNuTheta(nuTheta)
-      .setLogNuY(logNuY)
+      .setNuTheta(nuTheta.clone())
+      .setLogNuY(Matrices.clone(logNuY))
       .build()
       ;
     }

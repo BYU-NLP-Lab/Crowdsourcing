@@ -70,7 +70,7 @@ public class ClassificationMeasurementModelLabeler implements DatasetLabeler{
     List<Prediction> unlabeledPredictions = Lists.newArrayList();
     for (Prediction prediction : calculateCorpusPredictions(
         data, data.getInfo().getNumClasses(), data.getInfo().getNumDocuments(), state)) {
-      if (prediction.getInstance().hasAnnotations()) {
+      if (prediction.getInstance().hasMeasurements()) {
         labeledPredictions.add(prediction);
       } else {
         unlabeledPredictions.add(prediction);

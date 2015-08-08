@@ -37,40 +37,28 @@ import edu.byu.nlp.util.Triple;
  */
 public class ClassificationMeasurementModelExpectations {
 
-//  private Map<Integer, Collection<MeasurementExpectation<Integer>>> measurementsForDocIndex;
   private Map<Integer, Collection<MeasurementExpectation<Integer>>> measurementsForAnnotator;
   private Map<Pair<Integer,Integer>, Collection<MeasurementExpectation<Integer>>> measurementsForAnnotatorAndDocIndex;
-  private Map<Triple<Integer,Integer,Integer>, Collection<MeasurementExpectation<Integer>>> measurementsForAnnotatorDocIndexAndClass;
+  private Map<Triple<Integer, Integer,Integer>, Collection<MeasurementExpectation<Integer>>> measurementsForAnnotatorDocIndexAndLabel;
 
-  private ClassificationMeasurementModelExpectations() {
-  }
+  private ClassificationMeasurementModelExpectations() {}
 
   public static ClassificationMeasurementModelExpectations from(State state) {
-    ClassificationMeasurementModelExpectations updater = new ClassificationMeasurementModelExpectations();
-    updater.initialize(state.getData(), state.getInstanceIndices(), state.getLogNuY());
-    return updater;
+    ClassificationMeasurementModelExpectations expectations = new ClassificationMeasurementModelExpectations();
+    expectations.initialize(state.getData(), state.getInstanceIndices(), state.getLogNuY());
+    return expectations;
   }
-
-//  public void setLogNuY_i(int docIndex, double[] logNuY_i) {
-//    for (MeasurementExpectation<Integer> expectation : measurementsForDocIndex.get(docIndex)) {
-//      expectation.setLogNuY_i(docIndex, logNuY_i);
-//    }
-//  }
 
   public Collection<MeasurementExpectation<Integer>> getExpectationsForAnnotator(int annotator){
     return nonNullCollection(measurementsForAnnotator.get(annotator));
   }
-
-//  public Collection<MeasurementExpectation<Integer>> getExpectationsForInstance(int docIndex){
-//    return nonNullCollection(measurementsForDocIndex.get(docIndex));
-//  }
 
   public Collection<MeasurementExpectation<Integer>> getExpectationsForAnnotatorAndInstance(int annotator, int docIndex){
     return nonNullCollection(measurementsForAnnotatorAndDocIndex.get(Pair.of(annotator, docIndex)));
   }
 
   public Collection<MeasurementExpectation<Integer>> getExpectationsForAnnotatorInstanceAndLabel(int annotator, int docIndex, int label){
-    return nonNullCollection(measurementsForAnnotatorDocIndexAndClass.get(Triple.of(annotator, docIndex, label)));
+    return nonNullCollection(measurementsForAnnotatorDocIndexAndLabel.get(Triple.of(annotator, docIndex, label)));
   }
   
   private static <T> Collection<T> nonNullCollection(Collection<T> baseCollection){
@@ -85,32 +73,31 @@ public class ClassificationMeasurementModelExpectations {
     if (measurementsForAnnotator == null) {
 
       // multimaps
-//      Multimap<Integer, MeasurementExpectation<Integer>> perDocIndex = ArrayListMultimap.create();
       Multimap<Integer, MeasurementExpectation<Integer>> perAnnotator = ArrayListMultimap.create();
       Multimap<Pair<Integer,Integer>, MeasurementExpectation<Integer>> perAnnotatorAndDocIndex = ArrayListMultimap.create(); 
-      Multimap<Triple<Integer,Integer,Integer>, MeasurementExpectation<Integer>> perAnnotatorDocIndexAndClass = ArrayListMultimap.create(); 
+      Multimap<Triple<Integer, Integer,Integer>, MeasurementExpectation<Integer>> perAnnotatorDocIndexAndLabel = ArrayListMultimap.create();
 
       // initialize each measurement expectation with the data (and index it for easy lookup)
       for (DatasetInstance item : dataset) {
         for (Measurement measurement : item.getAnnotations().getMeasurements()) {
-          ClassificationMeasurement cmeas = (ClassificationMeasurement)measurement;
+          int label = ((ClassificationMeasurement)measurement).getLabel();
           MeasurementExpectation<Integer> expectation = ClassificationMeasurementExpectations.fromMeasurement(measurement, dataset, instanceIndices, logNuY);
           // ignore measurements that don't apply to any documents
-          if (expectation.getDependentIndices().size()>0){
-            perAnnotator.put(measurement.getAnnotator(), expectation);
+          if (expectation.getDependentIndices().size()==0){
+            continue;
           }
+          perAnnotator.put(measurement.getAnnotator(), expectation);
           for (Integer docIndex: expectation.getDependentIndices()){
             perAnnotatorAndDocIndex.put(Pair.of(measurement.getAnnotator(), docIndex), expectation);
-            perAnnotatorDocIndexAndClass.put(Triple.of(measurement.getAnnotator(), docIndex, cmeas.getLabel()), expectation);
+            perAnnotatorDocIndexAndLabel.put(Triple.of(measurement.getAnnotator(), docIndex, label), expectation);
           }
           
         }
       }
 
-//      measurementsForDocIndex = perDocIndex.asMap();
       measurementsForAnnotator = perAnnotator.asMap();
       measurementsForAnnotatorAndDocIndex = perAnnotatorAndDocIndex.asMap();
-      measurementsForAnnotatorDocIndexAndClass = perAnnotatorDocIndexAndClass.asMap();
+      measurementsForAnnotatorDocIndexAndLabel = perAnnotatorDocIndexAndLabel.asMap();
     }
 
   }

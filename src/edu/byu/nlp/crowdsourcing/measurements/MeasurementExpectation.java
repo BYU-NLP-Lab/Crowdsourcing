@@ -74,7 +74,12 @@ public interface MeasurementExpectation<L> {
    * the entire expectation each time a single element changes. 
    */
   void setLogNuY_i(int docIndex, double[] logNuY_i);
-
+  
+  /**
+   * Get an individual expected value
+   */
+  double getExpectedValue(int docIndex);
+  
   /**
    * The value of sum_i E_y[feature(x_i,y)] wrt the approximate distribution q(y)
    */

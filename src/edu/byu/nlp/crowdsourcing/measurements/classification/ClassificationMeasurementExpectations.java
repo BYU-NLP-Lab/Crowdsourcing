@@ -7,6 +7,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.common.base.MoreObjects;
+import com.google.common.base.Preconditions;
 import com.google.common.collect.Range;
 import com.google.common.collect.Sets;
 
@@ -99,6 +100,10 @@ public class ClassificationMeasurementExpectations {
     protected double expectedValueOfSquaredSigma_i(int docIndex, double[] logNuY_i) {
       return expectedValue_i(docIndex, logNuY_i);
     }
+    @Override
+    public double getExpectedValue(int docIndex) {
+      return expectation.getSummand(docIndex);
+    }
     protected abstract double expectedValue_i(int docIndex, double[] logNuY_i);
   }
   
@@ -144,18 +149,19 @@ public class ClassificationMeasurementExpectations {
     }
     @Override
     public double featureValue(int docIndex, Integer label) {
-      ClassificationAnnotationMeasurement meas = getClassificationMeasurement();
-      return (docIndex==index && label==meas.getLabel())? meas.getValue(): 0;
-    }
-    @Override
-    protected double expectedValue_i(int docIndex, double[] logNuY_i) {
-      ClassificationAnnotationMeasurement meas = getClassificationMeasurement();
       if (docIndex!=index){
         logger.warn("DANGER! An annotation measurement is being asked for indices it doesn't depend on! This is VERY inefficient and probably indicates a bug!");
         return 0;
       }
-      // q(y) * annotation_value
-      return Math.exp(logNuY_i[meas.getLabel()]) * meas.getValue();
+      return (docIndex==index && label==getClassificationMeasurement().getLabel())? 1: 0;
+    }
+    @Override
+    protected double expectedValue_i(int docIndex, double[] logNuY_i) {
+      if (docIndex!=index){
+        logger.warn("DANGER! An annotation measurement is being asked for indices it doesn't depend on! This is VERY inefficient and probably indicates a bug!");
+        return 0;
+      }
+      return Math.exp(logNuY_i[getClassificationMeasurement().getLabel()]);
     }
     @Override
     public Set<Integer> getDependentIndices() {
@@ -203,7 +209,7 @@ public class ClassificationMeasurementExpectations {
     }
     @Override
     protected double expectedValue_i(int docIndex, double[] logNuY_i) {
-      return logNuY_i[label];
+      return Math.exp(logNuY_i[label]);
     }
     private void calculateDependentIndices(){
       if (dependentIndices==null){
@@ -265,6 +271,7 @@ public class ClassificationMeasurementExpectations {
       this.delegate=delegate;
       this.rangeMagnitude=delegate.getRange().upperEndpoint() - delegate.getRange().lowerEndpoint();
       this.rangeMagnitudeSquared = Math.pow(rangeMagnitude, 2);
+      Preconditions.checkArgument(delegate.getRange().lowerEndpoint()==0.0,"Ranges that must be shifted (non-zero lower endpoint) are not currently supported."); 
     }
     @Override
     public Dataset getDataset() {
@@ -309,6 +316,14 @@ public class ClassificationMeasurementExpectations {
     @Override
     public double piecewiseSquaredSumOfExpectedValuesOfSigma() {
       return delegate.piecewiseSquaredSumOfExpectedValuesOfSigma() / rangeMagnitudeSquared;
+    }
+    @Override
+    public double getExpectedValue(int docIndex) {
+      return delegate.getExpectedValue(docIndex);
+    }
+    @Override
+    public String toString() {
+      return "Scaled+"+delegate.toString();
     }
   }
   

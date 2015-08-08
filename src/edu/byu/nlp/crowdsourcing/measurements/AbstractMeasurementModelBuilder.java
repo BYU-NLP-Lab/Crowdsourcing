@@ -74,7 +74,7 @@ public abstract class AbstractMeasurementModelBuilder {
     /**
      * A constant used by q(y) update
      */
-    public Counter<Integer> getPerAnnotatorMeasurements(){
+    public Counter<Integer> getPerAnnotatorMeasurementCounts(){
       return annotatorMeasurementCounter;
     }
     /**
