@@ -131,6 +131,7 @@ public class BasicClassificationMeasurementModel implements ClassificationMeasur
 
       // posterior alpha
       nuSigma2[j][0] = (state.getStaticCounts().getPerAnnotatorMeasurementCounts().getCount(j) / 2.0) + priorAlpha;
+      Preconditions.checkState(Double.isFinite(nuSigma2[j][0]));
       
       // posterior beta
       // error sum
@@ -148,9 +149,11 @@ public class BasicClassificationMeasurementModel implements ClassificationMeasur
         errorSum += Math.pow(expectation.sumOfExpectedValuesOfSigma(), 2);
         errorSum -= expectation.piecewiseSquaredSumOfExpectedValuesOfSigma();
         errorSum += expectation.sumOfExpectedValuesOfSquaredSigma();
+        Preconditions.checkState(Double.isFinite(errorSum));
       }
       
       nuSigma2[j][1] = priorBeta + (0.5 * errorSum); 
+      Preconditions.checkState(Double.isFinite(nuSigma2[j][1]));
     }
   }
 

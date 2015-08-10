@@ -22,6 +22,7 @@ import edu.byu.nlp.data.types.DatasetInstance;
 import edu.byu.nlp.data.types.Measurement;
 import edu.byu.nlp.stats.MutableSum;
 import edu.byu.nlp.util.IntArrays;
+import edu.byu.nlp.util.Integers;
 
 /**
  * In the variation equations for the measurment model, 
@@ -180,7 +181,7 @@ public class ClassificationMeasurementExpectations {
   public static class LabeledPredicate extends AbstractExpectation{
     private Set<Integer> dependentIndices;
     private int label;
-    private int wordCount;
+    private double wordCount;
     private Map<String, Integer> documentIndices;
     private String predicate;
     public LabeledPredicate(ClassificationLabeledPredicateMeasurement measurement, Dataset dataset, Map<String, Integer> documentIndices) {
@@ -200,6 +201,7 @@ public class ClassificationMeasurementExpectations {
     @Override
     public Range<Double> getRange() {
       calculateDependentIndices();
+      Preconditions.checkState(wordCount!=0, "illegal 0 range.");
       return Range.closed(0.0, (double)wordCount);
     }
     @Override
@@ -222,9 +224,11 @@ public class ClassificationMeasurementExpectations {
         
         this.wordCount = 0;
         for (DatasetInstance instance: getDataset()){
-          Double localWordCount = instance.asFeatureVector().getValue(wordIndex);
-          if (localWordCount!=null){
+          Double rawLocalWordCount = instance.asFeatureVector().getValue(wordIndex);
+          if (rawLocalWordCount!=null){
+            int localWordCount = Integers.fromDouble(instance.asFeatureVector().getValue(wordIndex), 1e-20);
             dependentIndices.add(documentIndices.get(instance.getInfo().getRawSource()));
+            Preconditions.checkState(localWordCount>0, "A sparse document feature vector contains a 0 entry. This should never happen.");
             this.wordCount += localWordCount;
           }
         }
