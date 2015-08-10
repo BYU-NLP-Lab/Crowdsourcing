@@ -26,7 +26,6 @@ import edu.byu.nlp.crowdsourcing.measurements.MeasurementExpectation;
 import edu.byu.nlp.crowdsourcing.measurements.classification.ClassificationMeasurementModel.State;
 import edu.byu.nlp.data.measurements.ClassificationMeasurements.ClassificationMeasurement;
 import edu.byu.nlp.data.types.Dataset;
-import edu.byu.nlp.data.types.DatasetInstance;
 import edu.byu.nlp.data.types.Measurement;
 import edu.byu.nlp.util.Pair;
 import edu.byu.nlp.util.Triple;
@@ -61,6 +60,10 @@ public class ClassificationMeasurementModelExpectations {
   public Collection<MeasurementExpectation<Integer>> getExpectationsForAnnotatorInstanceAndLabel(int annotator, int docIndex, int label){
     return nonNullCollection(measurementsForAnnotatorDocIndexAndLabel.get(Triple.of(annotator, docIndex, label)));
   }
+
+  public Collection<MeasurementExpectation<Integer>> getExpectationsForDocumentIndex(int docIndex) {
+    return nonNullCollection(measurementsForDocIndex.get(docIndex));
+  }
   
   private static <T> Collection<T> nonNullCollection(Collection<T> baseCollection){
     if (baseCollection==null){
@@ -80,22 +83,20 @@ public class ClassificationMeasurementModelExpectations {
       Multimap<Triple<Integer, Integer,Integer>, MeasurementExpectation<Integer>> perAnnotatorDocIndexAndLabel = ArrayListMultimap.create();
 
       // initialize each measurement expectation with the data (and index it for easy lookup)
-      for (DatasetInstance item : dataset) {
-        for (Measurement measurement : item.getAnnotations().getMeasurements()) {
-          int label = ((ClassificationMeasurement)measurement).getLabel();
-          MeasurementExpectation<Integer> expectation = ClassificationMeasurementExpectations.fromMeasurement(measurement, dataset, instanceIndices, logNuY);
-          // ignore measurements that don't apply to any documents
-          if (expectation.getDependentIndices().size()==0){
-            continue;
-          }
-          perAnnotator.put(measurement.getAnnotator(), expectation);
-          for (Integer docIndex: expectation.getDependentIndices()){
-            perDocIndex.put(docIndex, expectation);
-            perAnnotatorAndDocIndex.put(Pair.of(measurement.getAnnotator(), docIndex), expectation);
-            perAnnotatorDocIndexAndLabel.put(Triple.of(measurement.getAnnotator(), docIndex, label), expectation);
-          }
-          
+      for (Measurement measurement : dataset.getMeasurements()) {
+        int label = ((ClassificationMeasurement)measurement).getLabel();
+        MeasurementExpectation<Integer> expectation = ClassificationMeasurementExpectations.fromMeasurement(measurement, dataset, instanceIndices, logNuY);
+        // ignore measurements that don't apply to any documents
+        if (expectation.getDependentIndices().size()==0){
+          continue;
         }
+        perAnnotator.put(measurement.getAnnotator(), expectation);
+        for (Integer docIndex: expectation.getDependentIndices()){
+          perDocIndex.put(docIndex, expectation);
+          perAnnotatorAndDocIndex.put(Pair.of(measurement.getAnnotator(), docIndex), expectation);
+          perAnnotatorDocIndexAndLabel.put(Triple.of(measurement.getAnnotator(), docIndex, label), expectation);
+        }
+        
       }
 
       measurementsForAnnotator = perAnnotator.asMap();
@@ -111,7 +112,7 @@ public class ClassificationMeasurementModelExpectations {
    * that depend on this doc
    */
   public void updateLogNuY_i(int docIndex, double[] logNuY_i) {
-    for (MeasurementExpectation<Integer> expectation: measurementsForDocIndex.get(docIndex)){
+    for (MeasurementExpectation<Integer> expectation: getExpectationsForDocumentIndex(docIndex)){
       expectation.setLogNuY_i(docIndex, logNuY_i);
     }
   }

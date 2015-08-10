@@ -9,7 +9,6 @@ import edu.byu.nlp.crowdsourcing.ModelInitialization.AssignmentInitializer;
 import edu.byu.nlp.crowdsourcing.PriorSpecification;
 import edu.byu.nlp.crowdsourcing.measurements.classification.ClassificationMeasurementModel;
 import edu.byu.nlp.data.types.Dataset;
-import edu.byu.nlp.data.types.DatasetInstance;
 import edu.byu.nlp.data.types.Measurement;
 import edu.byu.nlp.dataset.Datasets;
 import edu.byu.nlp.math.GammaFunctions;
@@ -93,10 +92,9 @@ public abstract class AbstractMeasurementModelBuilder {
     
     private void initialize(Dataset data, PriorSpecification priors){
       annotatorMeasurementCounter = new DenseCounter(data.getInfo().getNumAnnotators());
-      for (DatasetInstance instance: data){
-        for (Measurement measurement: instance.getAnnotations().getMeasurements()){
-          annotatorMeasurementCounter.incrementCount(measurement.getAnnotator(), 1);
-        }
+      
+      for (Measurement measurement: data.getMeasurements()){
+        annotatorMeasurementCounter.incrementCount(measurement.getAnnotator(), 1);
       }
 
       // lower bound constant

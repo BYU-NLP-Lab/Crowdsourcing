@@ -411,13 +411,14 @@ public class BasicClassificationMeasurementModel implements ClassificationMeasur
         state.getLogNuY()[docIndex][c] = 0;
       }
       
-      // increment with measured annotation values
-      for (Measurement measurement: instance.getAnnotations().getMeasurements()){
-        // empirical
-        if (measurement instanceof ClassificationAnnotationMeasurement){
-          ClassificationAnnotationMeasurement annotation = (ClassificationAnnotationMeasurement) measurement;
-          state.getLogNuY()[docIndex][annotation.getLabel()] += annotation.getValue();
-        }
+    }
+    // increment with measured annotation values
+    for (Measurement measurement: data.getMeasurements()){
+      // empirical
+      if (measurement instanceof ClassificationAnnotationMeasurement){
+        ClassificationAnnotationMeasurement classificationMeasurement = (ClassificationAnnotationMeasurement) measurement;
+        int docIndex = getInstanceIndices().get(classificationMeasurement.getDocumentSource());
+        state.getLogNuY()[docIndex][classificationMeasurement.getLabel()] += classificationMeasurement.getValue();
 //        // RANDOM initialization (for debugging)
 //        state.getLogNuY()[docIndex][rnd.nextInt(state.getNumClasses())] += 1;
       }

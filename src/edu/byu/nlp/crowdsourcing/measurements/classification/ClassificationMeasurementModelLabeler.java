@@ -16,6 +16,7 @@
 package edu.byu.nlp.crowdsourcing.measurements.classification;
 
 import java.util.List;
+import java.util.Map;
 
 import com.google.common.collect.Lists;
 
@@ -61,16 +62,19 @@ public class ClassificationMeasurementModelLabeler implements DatasetLabeler{
       ModelTraining.doOperations(trainingOperations, model, intermediatePredictionLogger);
     }
     
-    ClassificationMeasurementModel.State state = model.getCurrentState();
-    ClassificationMeasurementModelExpectations counts = ClassificationMeasurementModelExpectations.from(state); 
-    Dataset data = state.getData();
+    ClassificationMeasurementModel.State modelState = model.getCurrentState();
+    ClassificationMeasurementModelExpectations counts = ClassificationMeasurementModelExpectations.from(modelState); 
+    Dataset data = modelState.getData();
+    Map<String, Integer> instanceIndices = modelState.getInstanceIndices();
     
     // corpus predictions 
     List<Prediction> labeledPredictions = Lists.newArrayList();
     List<Prediction> unlabeledPredictions = Lists.newArrayList();
-    for (Prediction prediction : calculateCorpusPredictions(
-        data, data.getInfo().getNumClasses(), data.getInfo().getNumDocuments(), state)) {
-      if (prediction.getInstance().hasMeasurements()) {
+    List<Prediction> predictions = calculateCorpusPredictions(data, data.getInfo().getNumClasses(), data.getInfo().getNumDocuments(), modelState);
+    for (Prediction prediction : predictions) {
+      int docIndex = instanceIndices.get(prediction.getInstance().getInfo().getRawSource());
+      // add instance to labeled predictions if it is covered by any measurment
+      if (counts.getExpectationsForDocumentIndex(docIndex).size()>0) {
         labeledPredictions.add(prediction);
       } else {
         unlabeledPredictions.add(prediction);
@@ -87,7 +91,7 @@ public class ClassificationMeasurementModelLabeler implements DatasetLabeler{
     // accuracies
     double[] annotatorAccuracies = new double[data.getInfo().getNumAnnotators()];
     for (int j=0; j<annotatorAccuracies.length; j++){
-      double alpha = state.getNuSigma2()[j][0], beta = state.getNuSigma2()[j][1];
+      double alpha = modelState.getNuSigma2()[j][0], beta = modelState.getNuSigma2()[j][1];
       annotatorAccuracies[j] = beta / (alpha - 1);
     }
     double machineAccuracy = -1;
