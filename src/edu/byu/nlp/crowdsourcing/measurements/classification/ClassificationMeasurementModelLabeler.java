@@ -15,9 +15,12 @@
  */
 package edu.byu.nlp.crowdsourcing.measurements.classification;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 
+import com.google.common.base.Objects;
+import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
 
 import edu.byu.nlp.classify.data.DatasetLabeler;
@@ -27,8 +30,12 @@ import edu.byu.nlp.classify.eval.Predictions;
 import edu.byu.nlp.classify.util.ModelTraining;
 import edu.byu.nlp.classify.util.ModelTraining.IntermediatePredictionLogger;
 import edu.byu.nlp.crowdsourcing.measurements.AbstractMeasurementModelBuilder;
+import edu.byu.nlp.crowdsourcing.measurements.MeasurementExpectation;
+import edu.byu.nlp.data.measurements.ClassificationMeasurements.ClassificationAnnotationMeasurement;
+import edu.byu.nlp.data.measurements.ClassificationMeasurements.ClassificationLabeledLocationMeasurement;
 import edu.byu.nlp.data.types.Dataset;
 import edu.byu.nlp.data.types.DatasetInstance;
+import edu.byu.nlp.data.types.Measurement;
 import edu.byu.nlp.util.DoubleArrays;
 import edu.byu.nlp.util.Enumeration;
 import edu.byu.nlp.util.Iterables2;
@@ -53,6 +60,7 @@ public class ClassificationMeasurementModelLabeler implements DatasetLabeler{
     this.model=model;
   }
   
+  
   /** {@inheritDoc} */
   @Override
   public Predictions label(Dataset trainingInstances, Dataset heldoutInstances) {
@@ -63,7 +71,7 @@ public class ClassificationMeasurementModelLabeler implements DatasetLabeler{
     }
     
     ClassificationMeasurementModel.State modelState = model.getCurrentState();
-    ClassificationMeasurementModelExpectations counts = ClassificationMeasurementModelExpectations.from(modelState); 
+    ClassificationMeasurementModelExpectations expectations = ClassificationMeasurementModelExpectations.from(modelState); 
     Dataset data = modelState.getData();
     Map<String, Integer> instanceIndices = modelState.getInstanceIndices();
     
@@ -72,9 +80,10 @@ public class ClassificationMeasurementModelLabeler implements DatasetLabeler{
     List<Prediction> unlabeledPredictions = Lists.newArrayList();
     List<Prediction> predictions = calculateCorpusPredictions(data, data.getInfo().getNumClasses(), data.getInfo().getNumDocuments(), modelState);
     for (Prediction prediction : predictions) {
-      int docIndex = instanceIndices.get(prediction.getInstance().getInfo().getRawSource());
-      // add instance to labeled predictions if it is covered by any measurment
-      if (counts.getExpectationsForDocumentIndex(docIndex).size()>0) {
+      String docSource = prediction.getInstance().getInfo().getRawSource();
+      int docIndex = instanceIndices.get(docSource);
+      // add instance to labeled predictions if it is covered by any measurement
+      if (hasAnnotation(expectations.getExpectationsForDocumentIndex(docIndex),docSource)) {
         labeledPredictions.add(prediction);
       } else {
         unlabeledPredictions.add(prediction);
@@ -93,10 +102,11 @@ public class ClassificationMeasurementModelLabeler implements DatasetLabeler{
     for (int j=0; j<annotatorAccuracies.length; j++){
       double alpha = modelState.getNuSigma2()[j][0], beta = modelState.getNuSigma2()[j][1];
       annotatorAccuracies[j] = beta / (alpha - 1);
+      Preconditions.checkState(Double.isFinite(annotatorAccuracies[j]));
     }
     double machineAccuracy = -1;
     
-    double logJoint = model.lowerBound(counts);
+    double logJoint = model.lowerBound(expectations);
     return new Predictions(labeledPredictions,
                                                          unlabeledPredictions,
                                                          heldoutPredictions,
@@ -107,6 +117,23 @@ public class ClassificationMeasurementModelLabeler implements DatasetLabeler{
                                                          logJoint);
   }
 
+  private boolean hasAnnotation(Collection<MeasurementExpectation<Integer>> expectationsForDocumentIndex, String docSource) {
+    for (MeasurementExpectation<Integer> expectation: expectationsForDocumentIndex){
+      Measurement meas = expectation.getMeasurement();
+      if (meas instanceof ClassificationAnnotationMeasurement){
+        return true;
+      }
+      if (meas instanceof ClassificationLabeledLocationMeasurement){
+        ClassificationLabeledLocationMeasurement locationMeasurement = (ClassificationLabeledLocationMeasurement)meas;
+        String measSource = locationMeasurement.getSource();
+        if (Objects.equal(docSource, measSource)){
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+  
   private List<Prediction> calculateGeneralizationPredictions(
       Dataset instances, int numFeatures,
       int numLabels, ClassificationMeasurementModel model) {

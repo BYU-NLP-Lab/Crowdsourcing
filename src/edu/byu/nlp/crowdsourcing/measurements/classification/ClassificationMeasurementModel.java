@@ -42,9 +42,11 @@ public interface ClassificationMeasurementModel extends SupportsTrainingOperatio
     private final double[][] logNuY; // N X C (one per instance per class)
     private final Dataset data;
     private final StaticMeasurementModelCounts staticCounts;
+    private boolean measurementsPreScaled;
+    private int trustedAnnotator;
     
     private State(PriorSpecification priors, Map<String,Integer> instanceIndices, Dataset data, StaticMeasurementModelCounts staticCounts,
-        double[] nuTheta, double[][] nuSigma2, double[][] logNuY){
+        double[] nuTheta, double[][] nuSigma2, double[][] logNuY, boolean measurementsPreScaled, int trustedAnnotator){
       this.priors=priors;
       this.instanceIndices=instanceIndices;
       this.data=data;
@@ -52,6 +54,8 @@ public interface ClassificationMeasurementModel extends SupportsTrainingOperatio
       this.nuTheta=nuTheta;
       this.nuSigma2=nuSigma2;
       this.logNuY=logNuY;
+      this.measurementsPreScaled=measurementsPreScaled;
+      this.trustedAnnotator=trustedAnnotator;
     }
     public double[][] getLogNuY(){
       return logNuY;
@@ -83,6 +87,12 @@ public interface ClassificationMeasurementModel extends SupportsTrainingOperatio
     public PriorSpecification getPriors(){
       return priors;
     }
+    public boolean getMeasurementsPreScaled(){
+      return measurementsPreScaled;
+    }
+    public int getTrustedAnnotator(){
+      return trustedAnnotator;
+    }
     
     public static class Builder{
 
@@ -93,6 +103,8 @@ public interface ClassificationMeasurementModel extends SupportsTrainingOperatio
       private double[][] logNuY; // N X C (one per instance per class)
       private Dataset data;
       private StaticMeasurementModelCounts staticCounts;
+      private boolean measurementsPreScaled;
+      private int trustedAnnotator;
       
       public Builder setLogNuY(double[][] logNuY){
         this.logNuY=logNuY;
@@ -123,9 +135,19 @@ public interface ClassificationMeasurementModel extends SupportsTrainingOperatio
         this.data=data;
         return this;
       }
+      
+      public Builder setMeasurementsPreScaled(boolean measurementsPreScaled){
+        this.measurementsPreScaled=measurementsPreScaled;
+        return this;
+      }
   
       public Builder setStaticCounts(StaticMeasurementModelCounts staticCounts) {
         this.staticCounts=staticCounts;
+        return this;
+      }
+
+      public Builder setTrustedAnnotator(int trustedMeasurementAnnotator) {
+        this.trustedAnnotator=trustedMeasurementAnnotator;
         return this;
       }
   
@@ -142,8 +164,9 @@ public interface ClassificationMeasurementModel extends SupportsTrainingOperatio
         Preconditions.checkNotNull(nuTheta);
         Preconditions.checkNotNull(nuSigma2);
         Preconditions.checkNotNull(logNuY);
-        return new State(priors, instanceIndices, data, staticCounts, nuTheta, nuSigma2, logNuY);
+        return new State(priors, instanceIndices, data, staticCounts, nuTheta, nuSigma2, logNuY, measurementsPreScaled, trustedAnnotator);
       }
+      
     }
 
     public State copy() {
@@ -154,6 +177,7 @@ public interface ClassificationMeasurementModel extends SupportsTrainingOperatio
       .setNuSigma2(Matrices.clone(nuSigma2))
       .setStaticCounts(staticCounts)
       .setNuTheta(nuTheta.clone())
+      .setMeasurementsPreScaled(measurementsPreScaled)
       .setLogNuY(Matrices.clone(logNuY))
       .build()
       ;

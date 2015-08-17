@@ -233,7 +233,7 @@ public class MultiAnnDatasetLabeler implements DatasetLabeler{
 	public Predictions predict(MultiAnnModel model, Dataset data, Dataset heldoutData) {
 		logConfusions("Before Diagonalizing ", model.getCurrentState());
 		MultiAnnModelPredictor predictor = new MultiAnnModelPredictor(model, data, predictSingleLastSample,
-				diagonalizationMethod, goldInstancesForDiagonalization, diagonalizationWithFullConfusionMatrix, gold);
+				diagonalizationMethod, goldInstancesForDiagonalization, diagonalizationWithFullConfusionMatrix, gold, rnd);
 
 		// label switching fixed in these params
 		MultiAnnState sample = predictor.getFinalPredictiveParameters(); 

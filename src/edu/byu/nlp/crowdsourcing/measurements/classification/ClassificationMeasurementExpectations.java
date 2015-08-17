@@ -3,6 +3,8 @@ package edu.byu.nlp.crowdsourcing.measurements.classification;
 import java.util.Map;
 import java.util.Set;
 
+import org.apache.commons.math3.linear.ArrayRealVector;
+import org.apache.commons.math3.linear.RealVector;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -12,17 +14,20 @@ import com.google.common.collect.Range;
 import com.google.common.collect.Sets;
 
 import edu.byu.nlp.crowdsourcing.measurements.MeasurementExpectation;
-import edu.byu.nlp.data.measurements.ClassificationMeasurements.BasicClassificationLabelProportionMeasurement;
-import edu.byu.nlp.data.measurements.ClassificationMeasurements.BasicClassificationLabeledPredicateMeasurement;
 import edu.byu.nlp.data.measurements.ClassificationMeasurements.ClassificationAnnotationMeasurement;
+import edu.byu.nlp.data.measurements.ClassificationMeasurements.ClassificationLabeledLocationMeasurement;
 import edu.byu.nlp.data.measurements.ClassificationMeasurements.ClassificationLabeledPredicateMeasurement;
-import edu.byu.nlp.data.measurements.ClassificationMeasurements.ClassificationProportionMeasurement;
+import edu.byu.nlp.data.measurements.ClassificationMeasurements.ClassificationLabelProportionMeasurement;
+import edu.byu.nlp.data.streams.PorterStemmer;
 import edu.byu.nlp.data.types.Dataset;
 import edu.byu.nlp.data.types.DatasetInstance;
 import edu.byu.nlp.data.types.Measurement;
+import edu.byu.nlp.dataset.Datasets;
 import edu.byu.nlp.stats.MutableSum;
+import edu.byu.nlp.util.DoubleArrays;
 import edu.byu.nlp.util.IntArrays;
 import edu.byu.nlp.util.Integers;
+import edu.byu.nlp.util.Pair;
 
 /**
  * In the variation equations for the measurment model, 
@@ -112,7 +117,7 @@ public class ClassificationMeasurementExpectations {
   
   public static class LabelProportion extends AbstractExpectation{
 
-    public LabelProportion(ClassificationProportionMeasurement measurement, Dataset dataset) {
+    public LabelProportion(ClassificationLabelProportionMeasurement measurement, Dataset dataset) {
       super((Measurement) measurement, dataset);
     }
     @Override
@@ -130,8 +135,8 @@ public class ClassificationMeasurementExpectations {
           IntArrays.asList(
               IntArrays.sequence(0, getDataset().getInfo().getNumDocuments())));
     }
-    public ClassificationProportionMeasurement getClassificationMeasurement(){
-      return (ClassificationProportionMeasurement) getMeasurement();
+    public ClassificationLabelProportionMeasurement getClassificationMeasurement(){
+      return (ClassificationLabelProportionMeasurement) getMeasurement();
     }
     @Override
     public Range<Double> getRange() {
@@ -201,7 +206,7 @@ public class ClassificationMeasurementExpectations {
     @Override
     public Range<Double> getRange() {
       calculateDependentIndices();
-      Preconditions.checkState(wordCount!=0, "illegal 0 range.");
+      Preconditions.checkState(wordCount>0, "illegal wordCount value: "+wordCount);
       return Range.closed(0.0, (double)wordCount);
     }
     @Override
@@ -216,11 +221,12 @@ public class ClassificationMeasurementExpectations {
     private void calculateDependentIndices(){
       if (dependentIndices==null){
         this.dependentIndices = Sets.newHashSet();
-        Integer wordIndex = getDataset().getInfo().getFeatureIndexer().indexOf(predicate);
+        String stemmedPredicate = new PorterStemmer().apply(predicate);
+        Integer wordIndex = getDataset().getInfo().getFeatureIndexer().indexOf(stemmedPredicate);
         // unknown word
-        if (wordIndex==null){
-          throw new IllegalStateException("Tried to add a predicate (word) that was not found in the corpus! This should never happen!");
-        }
+//        if (wordIndex==getDataset().getInfo().getFeatureIndexer().indexOf(null)){
+//          logger.debug("Tried to add a predicate ("+predicate+") that was not found in the corpus! This shouldn't happen too much.");
+//        }
         
         this.wordCount = 0;
         for (DatasetInstance instance: getDataset()){
@@ -235,6 +241,101 @@ public class ClassificationMeasurementExpectations {
       }
     }
   }
+
+  /**
+   * WARNING: NOT thread-safe. A shared cache for pairwise cosine distances between documents
+   */
+  private static class LocationAdjacencyMatrix{
+    private LocationAdjacencyMatrix(){}
+    private static double[][] matrix = null;
+    protected static double[][] getMatrix(Dataset dataset, Map<String, Integer> documentIndices){
+      if (matrix==null){
+        logger.info("pre-calculating cosine adjacency matrix...");
+        Map<Pair<String, String>, Double> srcMatrix = Datasets.calculateCosineAdjacencyMatrix(dataset);
+        logger.info("done!");
+        matrix = new double[documentIndices.size()][documentIndices.size()];
+        for (Pair<String, String> entry: srcMatrix.keySet()){
+          int i1 = documentIndices.get(entry.getFirst());
+          int i2 = documentIndices.get(entry.getSecond());
+          Preconditions.checkState(matrix[i1][i2]==0);
+          matrix[i1][i2] = srcMatrix.get(entry);
+        }
+      }
+      
+      return matrix;
+    }
+  }
+  
+  public static class LabeledLocation extends AbstractExpectation{
+    private int label;
+    private double totalSimilarity = -1;
+    private Map<String, Integer> documentIndices;
+    private double[] location;
+    private double[] cosines, cosinesSquared; // cosine distance of this location with all documents
+    private String source;
+    public LabeledLocation(ClassificationLabeledLocationMeasurement measurement, Dataset dataset, Map<String, Integer> documentIndices) {
+      super((Measurement) measurement, dataset);
+      this.label = measurement.getLabel();
+      this.documentIndices=documentIndices;
+      this.location=measurement.getLocation();
+      this.source=measurement.getSource();
+      Preconditions.checkArgument(label>=0);
+      Preconditions.checkArgument(location!=null || source!=null);
+      Preconditions.checkNotNull(measurement);
+      Preconditions.checkNotNull(dataset);
+      Preconditions.checkNotNull(documentIndices);
+    }
+    @Override
+    public double featureValue(int docIndex, Integer label) {
+      calculateCosines();
+      if (!getDependentIndices().contains(docIndex)){
+        logger.error("DANGER! LabeledLocation is being asked for indices that it doesn't depend on! This is VERY slow and probably a bug!!!");
+        return 0;
+      }
+      return label==this.label? cosines[docIndex]: 0;
+    }
+    @Override
+    public Range<Double> getRange() {
+      calculateCosines();
+      Preconditions.checkState(totalSimilarity>0, "illegal totalSimilarity value: "+totalSimilarity);
+      return Range.closed(0.0, totalSimilarity);
+    }
+    @Override
+    public Set<Integer> getDependentIndices() {
+      // all of them
+      return Sets.newHashSet(
+          IntArrays.asList(
+              IntArrays.sequence(0, getDataset().getInfo().getNumDocuments())));
+    }
+    @Override
+    protected double expectedValue_i(int docIndex, double[] logNuY_i) {
+      calculateCosines();
+      return cosines[docIndex] * Math.exp(logNuY_i[label]);
+    }
+    @Override
+    protected double expectedValueOfSquaredSigma_i(int docIndex, double[] logNuY_i) {
+      return cosinesSquared[docIndex] * Math.exp(logNuY_i[label]);
+    }
+    private void calculateCosines(){
+      if (cosines==null){
+        if (source!=null){
+          // this location refers to an instance in the dataset. Use pre-computed, shared vectors
+          cosines = LocationAdjacencyMatrix.getMatrix(getDataset(), documentIndices)[documentIndices.get(source)];
+        }
+        else{
+          cosines = new double[getDataset().getInfo().getNumDocuments()];
+          // this location is a custom location. Compute manually
+          for (DatasetInstance inst: getDataset()){
+            RealVector v1 = new ArrayRealVector(location);
+            RealVector v2 = inst.asFeatureVector().asApacheSparseRealVector();
+            cosines[documentIndices.get(inst.getInfo().getRawSource())] = v1.cosine(v2);
+          }
+        }
+      }
+      cosinesSquared  = DoubleArrays.pow(cosines,2);
+      totalSimilarity = DoubleArrays.sum(cosines);
+    }
+  }
   
   public static MeasurementExpectation<Integer> fromMeasurement(Measurement measurement, Dataset dataset, Map<String,Integer> documentIndices, double[][] logNuY){
     MeasurementExpectation<Integer> expectation;
@@ -244,13 +345,17 @@ public class ClassificationMeasurementExpectations {
       expectation = new ClassificationMeasurementExpectations.Annotation(
           (ClassificationAnnotationMeasurement) measurement, dataset, documentIndices);
     }
-    else if (measurement instanceof BasicClassificationLabelProportionMeasurement){
+    else if (measurement instanceof ClassificationLabelProportionMeasurement){
       expectation = new ClassificationMeasurementExpectations.LabelProportion(
-          (ClassificationProportionMeasurement) measurement, dataset);
+          (ClassificationLabelProportionMeasurement) measurement, dataset);
     }
-    else if (measurement instanceof BasicClassificationLabeledPredicateMeasurement){
+    else if (measurement instanceof ClassificationLabeledPredicateMeasurement){
       expectation = new ClassificationMeasurementExpectations.LabeledPredicate(
           (ClassificationLabeledPredicateMeasurement) measurement, dataset, documentIndices);
+    }
+    else if (measurement instanceof ClassificationLabeledLocationMeasurement){
+      expectation = new ClassificationMeasurementExpectations.LabeledLocation(
+          (ClassificationLabeledLocationMeasurement) measurement, dataset, documentIndices);
     }
     else{
       throw new IllegalArgumentException("unknown measurement type: "+measurement.getClass().getName());

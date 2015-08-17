@@ -46,7 +46,7 @@ public class EmpiricalMeasurementProvider<D> implements LabelProvider<D, Measure
 
 	/** {@inheritDoc} */
 	@Override
-	  public Measurement labelFor(String source, D datum) {
+  public Measurement labelFor(String source, D datum) {
 	  return nextAnnotation(annotations.getAnnotationsFor(source,datum));
 	}
 
@@ -58,7 +58,7 @@ public class EmpiricalMeasurementProvider<D> implements LabelProvider<D, Measure
   private Measurement nextAnnotation(Multimap<Integer, FlatInstance<D, Integer>> instanceAnnotations) {
     // return next unused annotation for this annotator
     List<FlatInstance<D, Integer>> annotationList = Lists.newArrayList(instanceAnnotations.get(annotatorId));
-    Datasets.sortAnnotations(annotationList);
+    Datasets.sortAnnotationsInPlace(annotationList);
     
     for (FlatInstance<D, Integer> ann: annotationList){
       if (!usedAnnotations.contains(ann)){

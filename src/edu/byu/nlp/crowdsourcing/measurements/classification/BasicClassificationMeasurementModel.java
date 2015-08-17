@@ -48,9 +48,12 @@ import edu.byu.nlp.util.Matrices;
 public class BasicClassificationMeasurementModel implements ClassificationMeasurementModel{
   private static final Logger logger = LoggerFactory.getLogger(BasicClassificationMeasurementModel.class);
   private static boolean SCALE_MEASUREMENTS = true;
+  
+  public static final double TRUSTED_ALPHA = 1e6;
+  public static final double TRUSTED_BETA = 1.1;
 
   private State state;
-  private RandomGenerator rnd;  
+  private RandomGenerator rnd;
 
   
   public BasicClassificationMeasurementModel(State state, RandomGenerator rnd) {
@@ -76,21 +79,18 @@ public class BasicClassificationMeasurementModel implements ClassificationMeasur
     
     // update the state in place, variable by variable 
     ClassificationMeasurementModelExpectations expectations = ClassificationMeasurementModelExpectations.from(state);
-    System.out.println("LB after initialization: "+lowerBound(state,expectations));
+    logger.info("LB after initialization: "+lowerBound(state,expectations));
     fitNuTheta(state);
-    System.out.println("LB after fitNuTheta: "+lowerBound(state,expectations));
+    logger.info("LB after fitNuTheta: "+lowerBound(state,expectations));
     fitNuSigma2(state, expectations);
-    System.out.println("LB after fitNuSigma2: "+lowerBound(state,expectations));
+    logger.info("LB after fitNuSigma2: "+lowerBound(state,expectations));
     fitLogNuY(state, expectations);
-  
-//    expectations = ClassificationMeasurementModelExpectations.from(this.state); // have to update this since nuY changed
-    System.out.println("LB after fitLogNuY: "+lowerBound(state,expectations));
+    logger.info("LB after fitLogNuY: "+lowerBound(state,expectations));
     
-    System.out.println("nuTheta="+DoubleArrays.toString(state.getNuTheta()));
-    System.out.println("nuSigma2="+Matrices.toString(state.getNuSigma2()));
-    System.out.println("logNuY: "+DoubleArrays.toString(state.getLogNuY()[0]));
-    
-    
+//    logger.info("nuTheta="+DoubleArrays.toString(state.getNuTheta()));
+//    logger.info("nuSigma2=\n"+Matrices.toString(state.getNuSigma2()));
+////    logger.info("logNuY=\n"+DoubleArrays.toString(state.getLogNuY()[0]));
+//    logger.info("logNuY=\n"+Matrices.toString(state.getLogNuY()));
 
     // optimize hyperparams
     if (state.getPriors().getInlineHyperparamTuning()){
@@ -118,15 +118,23 @@ public class BasicClassificationMeasurementModel implements ClassificationMeasur
           state.getPriors().getBTheta() // symmetric class prior
           + classCounts[c]; // count
     }
+    Preconditions.checkState(DoubleArrays.isFinite(nuTheta), "fitNuTheta() resulting in infinite parameter value"+nuTheta);
   }
 
+  public static double getPriorAlpha(State state, int annotator){
+    return annotator==state.getTrustedAnnotator()? TRUSTED_ALPHA: state.getPriors().getBGamma();
+  }
+
+  public static double getPriorBeta(State state, int annotator){
+    return annotator==state.getTrustedAnnotator()? TRUSTED_BETA: state.getPriors().getCGamma();
+  }
 
   private void fitNuSigma2(State state, ClassificationMeasurementModelExpectations expectations) {
     double[][] nuSigma2 = state.getNuSigma2();
     
-    // alpha is shoe-horned into priors.bgamma; beta into priors.cgamma
-    double priorAlpha = state.getPriors().getBGamma(), priorBeta = state.getPriors().getCGamma();
     for (int j=0; j<state.getNumAnnotators(); j++){
+      double priorAlpha = getPriorAlpha(state, j), priorBeta = getPriorBeta(state, j);
+      
       // each inverse gamma distributed sigma2_j has two variational parameters: shape (nuSigma2[j][0]) and scale (nuSigma2[j][1]).
 
       // posterior alpha
@@ -139,11 +147,17 @@ public class BasicClassificationMeasurementModel implements ClassificationMeasur
       for (MeasurementExpectation<Integer> expectation: expectations.getExpectationsForAnnotator(j)){
         double tau_jk = expectation.getMeasurement().getValue(); 
         if (SCALE_MEASUREMENTS){
-          double range = expectation.getRange().upperEndpoint() - expectation.getRange().lowerEndpoint();
-          tau_jk = expectation.getMeasurement().getValue() / range; // scale the observation
+          // empirical measurements are often already scaled between 0 and 1 
+          // (because annotators aren't good at guessing what the normalizer should be)
+          if (!state.getMeasurementsPreScaled()){ 
+            double range = expectation.getRange().upperEndpoint() - expectation.getRange().lowerEndpoint();
+            tau_jk = expectation.getMeasurement().getValue() / range; // scale the observation
+          }
           expectation = ScaledMeasurementExpectation.from(expectation); // scale the expectation quantities
         }
-        
+//        if (expectation.getMeasurement() instanceof ClassificationMeasurements.ClassificationLabeledPredicateMeasurement){
+//          System.out.println("hi");
+//        }
         errorSum += Math.pow(tau_jk, 2);
         errorSum -= 2 * tau_jk * expectation.sumOfExpectedValuesOfSigma();
         errorSum += Math.pow(expectation.sumOfExpectedValuesOfSigma(), 2);
@@ -183,8 +197,12 @@ public class BasicClassificationMeasurementModel implements ClassificationMeasur
             
             double tau_jk = expectation.getMeasurement().getValue(); 
             if (SCALE_MEASUREMENTS){
-              double range = expectation.getRange().upperEndpoint() - expectation.getRange().lowerEndpoint();
-              tau_jk = expectation.getMeasurement().getValue() / range; // scale the observation
+              // empirical measurements are often already scaled between 0 and 1 
+              // (because annotators aren't good at guessing what the normalizer should be)
+              if (!state.getMeasurementsPreScaled()){ 
+                double range = expectation.getRange().upperEndpoint() - expectation.getRange().lowerEndpoint();
+                tau_jk = expectation.getMeasurement().getValue() / range; // scale the observation
+              }
               expectation = ScaledMeasurementExpectation.from(expectation); // scale the expectation quantities
             }
             
@@ -211,6 +229,7 @@ public class BasicClassificationMeasurementModel implements ClassificationMeasur
         
       }
       DoubleArrays.logNormalizeToSelf(state.getLogNuY()[i]);
+      Preconditions.checkState(DoubleArrays.isFinite(state.getLogNuY()[i]), "produced infinite logNuY: "+state.getLogNuY()[i]);
       expectations.updateLogNuY_i(i, state.getLogNuY()[i]);
     }
   }
@@ -228,7 +247,7 @@ public class BasicClassificationMeasurementModel implements ClassificationMeasur
     double digammaOfSummedNuThetas = MeanFieldMultiRespModel.digammaOfSummedArray(state.getNuTheta());
     double[][] nuY = Matrices.exp(state.getLogNuY());
     double[] classCounts = Matrices.sumOverFirst(nuY);
-    double priorAlpha = state.getPriors().getBGamma(), priorBeta = state.getPriors().getCGamma(), priorDelta = state.getPriors().getBTheta();
+    double priorDelta = state.getPriors().getBTheta();
     
     // part1 - term 1
     double part1t1 = state.getStaticCounts().getLogLowerBoundConstant();
@@ -244,6 +263,7 @@ public class BasicClassificationMeasurementModel implements ClassificationMeasur
     // part1 - terms 3 
     double part1t3 = 0;
     for (int j=0; j<state.getNumAnnotators(); j++){
+      double priorAlpha = getPriorAlpha(state,j), priorBeta = getPriorBeta(state,j);
       double postAlpha = state.getNuSigma2()[j][0], postBeta = state.getNuSigma2()[j][1]; // IG variational params
       
       // part 1 - term 3
@@ -256,6 +276,7 @@ public class BasicClassificationMeasurementModel implements ClassificationMeasur
     // part1 - term 4
     double part1t4 = 0;
     for (int j=0; j<state.getNumAnnotators(); j++){
+      double priorBeta = getPriorBeta(state, j);
       double postAlpha = state.getNuSigma2()[j][0], postBeta = state.getNuSigma2()[j][1]; // IG variational params
       
       // error sum
@@ -263,8 +284,12 @@ public class BasicClassificationMeasurementModel implements ClassificationMeasur
       for (MeasurementExpectation<Integer> expectation: expectations.getExpectationsForAnnotator(j)){
         double tau_jk = expectation.getMeasurement().getValue(); 
         if (SCALE_MEASUREMENTS){
-          double range = expectation.getRange().upperEndpoint() - expectation.getRange().lowerEndpoint();
-          tau_jk = expectation.getMeasurement().getValue() / range; // scale the observation
+          // empirical measurements are often already scaled between 0 and 1 
+          // (because annotators aren't good at guessing what the normalizer should be)
+          if (!state.getMeasurementsPreScaled()){ 
+            double range = expectation.getRange().upperEndpoint() - expectation.getRange().lowerEndpoint();
+            tau_jk = expectation.getMeasurement().getValue() / range; // scale the observation
+          }
           expectation = ScaledMeasurementExpectation.from(expectation); // scale the expectation quantities
         }
         
@@ -291,7 +316,7 @@ public class BasicClassificationMeasurementModel implements ClassificationMeasur
     double digammaOfSummedNuThetas = MeanFieldMultiRespModel.digammaOfSummedArray(state.getNuTheta());
     double[][] nuY = Matrices.exp(state.getLogNuY());
     double[] classCounts = Matrices.sumOverFirst(nuY);
-    double priorAlpha = state.getPriors().getBGamma(), priorBeta = state.getPriors().getCGamma(), priorDelta = state.getPriors().getBTheta();
+    double priorDelta = state.getPriors().getBTheta();
     
     // part1 - term 1
     double part1t1 = state.getStaticCounts().getLogLowerBoundConstant();
@@ -307,6 +332,7 @@ public class BasicClassificationMeasurementModel implements ClassificationMeasur
     // part1 - terms 3 
     double part1t3 = 0;
     for (int j=0; j<state.getNumAnnotators(); j++){
+      double priorAlpha = getPriorAlpha(state, j), priorBeta = getPriorBeta(state, j);
       double postAlpha = state.getNuSigma2()[j][0], postBeta = state.getNuSigma2()[j][1]; // IG variational params
       
       // part 1 - term 3
@@ -319,6 +345,7 @@ public class BasicClassificationMeasurementModel implements ClassificationMeasur
     // part1 - term 4
     double part1t4 = 0;
     for (int j=0; j<state.getNumAnnotators(); j++){
+      double priorBeta = getPriorBeta(state, j);
       double postAlpha = state.getNuSigma2()[j][0], postBeta = state.getNuSigma2()[j][1]; // IG variational params
       
       // error sum
@@ -326,8 +353,12 @@ public class BasicClassificationMeasurementModel implements ClassificationMeasur
       for (MeasurementExpectation<Integer> expectation: expectations.getExpectationsForAnnotator(j)){
         double tau_jk = expectation.getMeasurement().getValue(); 
         if (SCALE_MEASUREMENTS){
-          double range = expectation.getRange().upperEndpoint() - expectation.getRange().lowerEndpoint();
-          tau_jk = expectation.getMeasurement().getValue() / range; // scale the observation
+          // empirical measurements are often already scaled between 0 and 1 
+          // (because annotators aren't good at guessing what the normalizer should be)
+          if (!state.getMeasurementsPreScaled()){ 
+            double range = expectation.getRange().upperEndpoint() - expectation.getRange().lowerEndpoint();
+            tau_jk = expectation.getMeasurement().getValue() / range; // scale the observation
+          }
           expectation = ScaledMeasurementExpectation.from(expectation); // scale the expectation quantities
         }
         
@@ -345,7 +376,9 @@ public class BasicClassificationMeasurementModel implements ClassificationMeasur
     }
     
     double expQlogP = part1t1 + part1t2 + part1t3 + part1t4;
-    
+
+    ////////////////////////////////////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////////////
 
     // part 2 - term 1
     double part2t1 = - GammaFunctions.logBeta(state.getNuTheta());
@@ -386,10 +419,11 @@ public class BasicClassificationMeasurementModel implements ClassificationMeasur
     // the terms above. Because ANY valid divergence should be >0, 
     // this gives us a way of sanity-checking some of the intermediate 
     // terms
-    Preconditions.checkState(-elbo>0, "Sanity test failed! -ELBO is a KL divergence and must be >0");
-    Preconditions.checkState((part2t1 + part2t2) - expQlogP > 0, "Sanity test failed! All KL divergence and must be >0");
-    Preconditions.checkState(part2t3 - expQlogP > 0, "Sanity test failed! All KL divergence and must be >0");
-    Preconditions.checkState(part2t4 - expQlogP > 0, "Sanity test failed! All KL divergence and must be >0");
+    Preconditions.checkState(expQlogQ - expQlogP >0, "Sanity test failed! -ELBO is a KL divergence and must be >0");
+    // paul: not sure these are valid KL divergences
+//    Preconditions.checkState((part2t1 + part2t2) - expQlogP > 0, "Sanity test failed! All KL divergence and must be >0");
+//    Preconditions.checkState(part2t3 - expQlogP > 0, "Sanity test failed! All KL divergence and must be >0");
+//    Preconditions.checkState(part2t4 - expQlogP > 0, "Sanity test failed! All KL divergence and must be >0");
     
     return elbo;
   }
@@ -492,7 +526,8 @@ public class BasicClassificationMeasurementModel implements ClassificationMeasur
     /** {@inheritDoc} */
     @Override
     protected ClassificationMeasurementModel buildModel(PriorSpecification priors, Dataset data, int[] y,
-        StaticMeasurementModelCounts staticCounts, Map<String, Integer> instanceIndices, RandomGenerator rnd) {
+        StaticMeasurementModelCounts staticCounts, Map<String, Integer> instanceIndices, 
+        boolean measurementsPreScaled, int trustedMeasurementAnnotator, RandomGenerator rnd) {
       double[] nuTheta = new double[data.getInfo().getNumClasses()];
       double[][] nuSigma2 = new double[data.getInfo().getNumAnnotators()][2];
       double[][] logNuY = new double[data.getInfo().getNumDocuments()][data.getInfo().getNumClasses()];
@@ -505,9 +540,10 @@ public class BasicClassificationMeasurementModel implements ClassificationMeasur
             .setNuTheta(nuTheta)
             .setNuSigma2(nuSigma2)
             .setLogNuY(logNuY)
+            .setTrustedAnnotator(trustedMeasurementAnnotator)
+            .setMeasurementsPreScaled(measurementsPreScaled)
             .build()
             ;
-      
       // create model and initialize variational parameters with an empirical fit
       BasicClassificationMeasurementModel model = new BasicClassificationMeasurementModel(state,rnd); 
       model.empiricalFit();

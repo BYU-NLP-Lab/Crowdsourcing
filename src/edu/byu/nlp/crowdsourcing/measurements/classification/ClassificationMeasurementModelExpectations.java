@@ -18,6 +18,9 @@ package edu.byu.nlp.crowdsourcing.measurements.classification;
 import java.util.Collection;
 import java.util.Map;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Multimap;
@@ -27,6 +30,8 @@ import edu.byu.nlp.crowdsourcing.measurements.classification.ClassificationMeasu
 import edu.byu.nlp.data.measurements.ClassificationMeasurements.ClassificationMeasurement;
 import edu.byu.nlp.data.types.Dataset;
 import edu.byu.nlp.data.types.Measurement;
+import edu.byu.nlp.util.Counter;
+import edu.byu.nlp.util.HashCounter;
 import edu.byu.nlp.util.Pair;
 import edu.byu.nlp.util.Triple;
 
@@ -35,6 +40,7 @@ import edu.byu.nlp.util.Triple;
  *
  */
 public class ClassificationMeasurementModelExpectations {
+  private static final Logger logger = LoggerFactory.getLogger(ClassificationMeasurementModelExpectations.class);
 
   private Map<Integer, Collection<MeasurementExpectation<Integer>>> measurementsForDocIndex;
   private Map<Integer, Collection<MeasurementExpectation<Integer>>> measurementsForAnnotator;
@@ -74,6 +80,7 @@ public class ClassificationMeasurementModelExpectations {
 
   public void initialize(Dataset dataset, Map<String, Integer> instanceIndices, double[][] logNuY) {
 
+    Counter<String> expectationTypes = new HashCounter<String>();
     if (measurementsForAnnotator == null) {
 
       // multimaps
@@ -86,18 +93,21 @@ public class ClassificationMeasurementModelExpectations {
       for (Measurement measurement : dataset.getMeasurements()) {
         int label = ((ClassificationMeasurement)measurement).getLabel();
         MeasurementExpectation<Integer> expectation = ClassificationMeasurementExpectations.fromMeasurement(measurement, dataset, instanceIndices, logNuY);
-        // ignore measurements that don't apply to any documents
         if (expectation.getDependentIndices().size()==0){
-          continue;
+          // ignore measurements that don't apply to any documents
+          expectationTypes.incrementCount("Ineffective+"+measurement.getClass().getSimpleName(), 1);
         }
-        perAnnotator.put(measurement.getAnnotator(), expectation);
-        for (Integer docIndex: expectation.getDependentIndices()){
-          perDocIndex.put(docIndex, expectation);
-          perAnnotatorAndDocIndex.put(Pair.of(measurement.getAnnotator(), docIndex), expectation);
-          perAnnotatorDocIndexAndLabel.put(Triple.of(measurement.getAnnotator(), docIndex, label), expectation);
+        else{
+          expectationTypes.incrementCount(measurement.getClass().getSimpleName(), 1);
+          perAnnotator.put(measurement.getAnnotator(), expectation);
+          for (Integer docIndex: expectation.getDependentIndices()){
+            perDocIndex.put(docIndex, expectation);
+            perAnnotatorAndDocIndex.put(Pair.of(measurement.getAnnotator(), docIndex), expectation);
+            perAnnotatorDocIndexAndLabel.put(Triple.of(measurement.getAnnotator(), docIndex, label), expectation);
+          }
         }
-        
       }
+      logger.info("Measurement Types: "+expectationTypes);
 
       measurementsForAnnotator = perAnnotator.asMap();
       measurementsForAnnotatorAndDocIndex = perAnnotatorAndDocIndex.asMap();

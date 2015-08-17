@@ -17,6 +17,8 @@ package edu.byu.nlp.crowdsourcing;
 
 import java.util.List;
 
+import org.apache.commons.math3.random.RandomGenerator;
+
 import com.google.common.collect.Lists;
 
 import edu.byu.nlp.classify.eval.BasicPrediction;
@@ -47,6 +49,7 @@ public class MultiAnnModelPredictor {
   private boolean diagonalizationWithFullConfusionMatrix;
   private DiagonalizationMethod diagonalizationMethod;
   private int goldInstancesForDiagonalization;
+  private RandomGenerator rnd;
   
   /**
    * @param gold (optional) if not null, the predictor fixed label switching according to the confusion matrix of the labeled data 
@@ -56,7 +59,7 @@ public class MultiAnnModelPredictor {
 		boolean predictSingleLastSample,
 		DiagonalizationMethod diagonalizationMethod,
 		int goldInstancesForDiagonalization,
-		boolean diagonalizationWithFullConfusionMatrix, int[] gold) {
+		boolean diagonalizationWithFullConfusionMatrix, int[] gold, RandomGenerator rnd) {
     this.model=model;
     this.data=data;
     this.predictSingleLastSample=predictSingleLastSample;
@@ -64,6 +67,7 @@ public class MultiAnnModelPredictor {
     this.diagonalizationMethod=diagonalizationMethod;
     this.goldInstancesForDiagonalization=goldInstancesForDiagonalization;
     this.diagonalizationWithFullConfusionMatrix=diagonalizationWithFullConfusionMatrix;
+    this.rnd=rnd;
   }
 
 
@@ -84,7 +88,7 @@ public MultiAnnState getFinalPredictiveParameters(){
     }
     
     // fix label switching (optionally cheating to find a good diagonalization)
-    return BlockCollapsedMultiAnnModelMath.fixLabelSwitching(sample, diagonalizationMethod, goldInstancesForDiagonalization, diagonalizationWithFullConfusionMatrix);
+    return BlockCollapsedMultiAnnModelMath.fixLabelSwitching(sample, diagonalizationMethod, goldInstancesForDiagonalization, diagonalizationWithFullConfusionMatrix, rnd);
   }
   
   public Predictions predict(Dataset heldoutData) {

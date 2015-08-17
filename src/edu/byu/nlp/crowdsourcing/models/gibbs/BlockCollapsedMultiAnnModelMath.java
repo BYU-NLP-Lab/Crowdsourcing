@@ -17,6 +17,7 @@ import java.util.Arrays;
 import java.util.Iterator;
 import java.util.Map;
 
+import org.apache.commons.math3.random.RandomGenerator;
 import org.fest.util.VisibleForTesting;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -175,7 +176,7 @@ public class BlockCollapsedMultiAnnModelMath {
   public static MultiAnnState fixLabelSwitching(MultiAnnState sample,
 		DiagonalizationMethod diagonalizationMethod,
 		int goldInstancesForDiagonalization,
-		boolean diagonalizationWithFullConfusionMatrix) {
+		boolean diagonalizationWithFullConfusionMatrix, RandomGenerator rnd) {
 //  public static MultiAnnSample fixLabelSwitching(MultiAnnSample sample, int[] gold, boolean labelSwitchingCheatUsesFullConfusionMatrix, Dataset data) {
     // manually re-order the labels according to y and then
     // m so that mu and alpha_j line up with their greatest entries
@@ -217,7 +218,7 @@ public class BlockCollapsedMultiAnnModelMath {
     case RAND:
       logger.info("Diagonalizing randomly");
       // randomly shuffled mapping 
-      yMap = IntArrays.shuffled(IntArrays.sequence(0, mu.length));
+      yMap = IntArrays.shuffled(IntArrays.sequence(0, mu.length), rnd);
         break;
     case GOLD:
       logger.info("Diagonalizing based on gold 'heldout data'");
