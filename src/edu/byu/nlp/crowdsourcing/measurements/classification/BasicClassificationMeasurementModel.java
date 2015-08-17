@@ -49,8 +49,8 @@ public class BasicClassificationMeasurementModel implements ClassificationMeasur
   private static final Logger logger = LoggerFactory.getLogger(BasicClassificationMeasurementModel.class);
   private static boolean SCALE_MEASUREMENTS = true;
   
-  public static final double TRUSTED_ALPHA = 1e6;
-  public static final double TRUSTED_BETA = 1.1;
+  // defines an almost perfectly trusted annotator
+  public static final double TRUSTED_ALPHA = 1e6, TRUSTED_BETA = 1.1;
 
   private State state;
   private RandomGenerator rnd;
@@ -155,9 +155,6 @@ public class BasicClassificationMeasurementModel implements ClassificationMeasur
           }
           expectation = ScaledMeasurementExpectation.from(expectation); // scale the expectation quantities
         }
-//        if (expectation.getMeasurement() instanceof ClassificationMeasurements.ClassificationLabeledPredicateMeasurement){
-//          System.out.println("hi");
-//        }
         errorSum += Math.pow(tau_jk, 2);
         errorSum -= 2 * tau_jk * expectation.sumOfExpectedValuesOfSigma();
         errorSum += Math.pow(expectation.sumOfExpectedValuesOfSigma(), 2);
@@ -178,7 +175,6 @@ public class BasicClassificationMeasurementModel implements ClassificationMeasur
     double digammaOfSummedNuThetas = MeanFieldMultiRespModel.digammaOfSummedArray(state.getNuTheta());
     
     for (int i=0; i<state.getNumDocuments(); i++){
-//      ClassificationMeasurementModelExpectations expectations = ClassificationMeasurementModelExpectations.from(state);
       
       for (int c=0; c<state.getNumClasses(); c++){
         // part 1 (identical to first part of meanfielditemresp.fitg
@@ -193,7 +189,7 @@ public class BasicClassificationMeasurementModel implements ClassificationMeasur
           double t4 = 0;
           for (MeasurementExpectation<Integer> expectation: expectations.getExpectationsForAnnotatorInstanceAndLabel(j, i, c)){
             double error = 0;
-            Integer rawLabel = ((ClassificationMeasurement)expectation.getMeasurement()).getLabel();
+//            Integer rawLabel = ((ClassificationMeasurement)expectation.getMeasurement()).getLabel();
             
             double tau_jk = expectation.getMeasurement().getValue(); 
             if (SCALE_MEASUREMENTS){

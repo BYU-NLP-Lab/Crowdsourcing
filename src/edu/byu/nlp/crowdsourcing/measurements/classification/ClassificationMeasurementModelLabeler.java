@@ -117,8 +117,8 @@ public class ClassificationMeasurementModelLabeler implements DatasetLabeler{
                                                          logJoint);
   }
 
-  private boolean hasAnnotation(Collection<MeasurementExpectation<Integer>> expectationsForDocumentIndex, String docSource) {
-    for (MeasurementExpectation<Integer> expectation: expectationsForDocumentIndex){
+  private boolean hasAnnotation(Collection<MeasurementExpectation<Integer>> expectations, String docSource) {
+    for (MeasurementExpectation<Integer> expectation: expectations){
       Measurement meas = expectation.getMeasurement();
       if (meas instanceof ClassificationAnnotationMeasurement){
         return true;
