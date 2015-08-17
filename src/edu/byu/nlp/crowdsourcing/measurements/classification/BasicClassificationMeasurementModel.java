@@ -33,7 +33,6 @@ import edu.byu.nlp.crowdsourcing.measurements.MeasurementExpectation;
 import edu.byu.nlp.crowdsourcing.measurements.classification.ClassificationMeasurementExpectations.ScaledMeasurementExpectation;
 import edu.byu.nlp.crowdsourcing.models.meanfield.MeanFieldMultiRespModel;
 import edu.byu.nlp.data.measurements.ClassificationMeasurements.ClassificationAnnotationMeasurement;
-import edu.byu.nlp.data.measurements.ClassificationMeasurements.ClassificationMeasurement;
 import edu.byu.nlp.data.types.Dataset;
 import edu.byu.nlp.data.types.DatasetInstance;
 import edu.byu.nlp.data.types.Measurement;
@@ -79,13 +78,13 @@ public class BasicClassificationMeasurementModel implements ClassificationMeasur
     
     // update the state in place, variable by variable 
     ClassificationMeasurementModelExpectations expectations = ClassificationMeasurementModelExpectations.from(state);
-    logger.info("LB after initialization: "+lowerBound(state,expectations));
+//    logger.info("LB after initialization: "+lowerBound(state,expectations));
     fitNuTheta(state);
-    logger.info("LB after fitNuTheta: "+lowerBound(state,expectations));
+//    logger.info("LB after fitNuTheta: "+lowerBound(state,expectations));
     fitNuSigma2(state, expectations);
-    logger.info("LB after fitNuSigma2: "+lowerBound(state,expectations));
+//    logger.info("LB after fitNuSigma2: "+lowerBound(state,expectations));
     fitLogNuY(state, expectations);
-    logger.info("LB after fitLogNuY: "+lowerBound(state,expectations));
+//    logger.info("LB after fitLogNuY: "+lowerBound(state,expectations));
     
 //    logger.info("nuTheta="+DoubleArrays.toString(state.getNuTheta()));
 //    logger.info("nuSigma2=\n"+Matrices.toString(state.getNuSigma2()));
