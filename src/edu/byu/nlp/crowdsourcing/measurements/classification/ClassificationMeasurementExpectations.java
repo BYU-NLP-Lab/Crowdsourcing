@@ -371,7 +371,7 @@ public class ClassificationMeasurementExpectations {
     else if (measurement instanceof ClassificationLabeledLocationMeasurement){
       ClassificationLabeledLocationMeasurement locMeas = (ClassificationLabeledLocationMeasurement) measurement;
       expectation = new ClassificationMeasurementExpectations.LabeledLocation(
-          locMeas, dataset, documentIndices, locMeas.getMaxNeighbors());
+          locMeas, dataset, documentIndices, locMeas.getNeighbors());
     }
     else{
       throw new IllegalArgumentException("unknown measurement type: "+measurement.getClass().getName());
