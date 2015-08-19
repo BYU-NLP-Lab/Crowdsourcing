@@ -273,12 +273,18 @@ public class ClassificationMeasurementExpectations {
     private double[] location;
     private double[] cosines, cosinesSquared; // cosine distance of this location with all documents
     private String source;
-    public LabeledLocation(ClassificationLabeledLocationMeasurement measurement, Dataset dataset, Map<String, Integer> documentIndices) {
+    private int neighbors;
+    private Set<Integer> dependentIndices;
+//    public LabeledLocation(ClassificationLabeledLocationMeasurement measurement, Dataset dataset, Map<String, Integer> documentIndices) {
+//      this(measurement, dataset, documentIndices, Integer.MAX_VALUE);
+//    }
+    public LabeledLocation(ClassificationLabeledLocationMeasurement measurement, Dataset dataset, Map<String, Integer> documentIndices, int neighbors) {
       super((Measurement) measurement, dataset);
       this.label = measurement.getLabel();
       this.documentIndices=documentIndices;
       this.location=measurement.getLocation();
       this.source=measurement.getSource();
+      this.neighbors = neighbors<=0? Integer.MAX_VALUE: neighbors; // value <=0 means unlimited
       Preconditions.checkArgument(label>=0);
       Preconditions.checkArgument(location!=null || source!=null);
       Preconditions.checkNotNull(measurement);
@@ -287,7 +293,7 @@ public class ClassificationMeasurementExpectations {
     }
     @Override
     public double featureValue(int docIndex, Integer label) {
-      calculateCosines();
+      calculateCosines(neighbors);
       if (!getDependentIndices().contains(docIndex)){
         logger.error("DANGER! LabeledLocation is being asked for indices that it doesn't depend on! This is VERY slow and probably a bug!!!");
         return 0;
@@ -296,27 +302,26 @@ public class ClassificationMeasurementExpectations {
     }
     @Override
     public Range<Double> getRange() {
-      calculateCosines();
+      calculateCosines(neighbors);
       Preconditions.checkState(totalSimilarity>0, "illegal totalSimilarity value: "+totalSimilarity);
       return Range.closed(0.0, totalSimilarity);
     }
+    
     @Override
     public Set<Integer> getDependentIndices() {
-      // all of them
-      return Sets.newHashSet(
-          IntArrays.asList(
-              IntArrays.sequence(0, getDataset().getInfo().getNumDocuments())));
+      calculateCosines(neighbors);
+      return dependentIndices;
     }
     @Override
     protected double expectedValue_i(int docIndex, double[] logNuY_i) {
-      calculateCosines();
+      calculateCosines(neighbors);
       return cosines[docIndex] * Math.exp(logNuY_i[label]);
     }
     @Override
     protected double expectedValueOfSquaredSigma_i(int docIndex, double[] logNuY_i) {
       return cosinesSquared[docIndex] * Math.exp(logNuY_i[label]);
     }
-    private void calculateCosines(){
+    private void calculateCosines(int kNeighbors){
       if (cosines==null){
         if (source!=null){
           // this location refers to an instance in the dataset. Use pre-computed, shared vectors
@@ -329,6 +334,16 @@ public class ClassificationMeasurementExpectations {
             RealVector v1 = new ArrayRealVector(location);
             RealVector v2 = inst.asFeatureVector().asApacheSparseRealVector();
             cosines[documentIndices.get(inst.getInfo().getRawSource())] = v1.cosine(v2);
+          }
+        }
+        // now zero out all but the top k entries per row. This will have the effect (in the feature, expectedValue, 
+        // and range functions) of adding an additional indicator function to the measurement function definition 
+        // that returns 1 only for the top k closest locations. also calculate dependent indices (all the  
+        // non-zero cosines)
+        dependentIndices = Sets.newHashSet(DoubleArrays.argMaxList(kNeighbors, cosines));
+        for (int i=0; i<getDataset().getInfo().getNumDocuments(); i++){
+          if (!dependentIndices.contains(i)){
+            cosines[i] = 0;
           }
         }
       }
@@ -354,8 +369,9 @@ public class ClassificationMeasurementExpectations {
           (ClassificationLabeledPredicateMeasurement) measurement, dataset, documentIndices);
     }
     else if (measurement instanceof ClassificationLabeledLocationMeasurement){
+      ClassificationLabeledLocationMeasurement locMeas = (ClassificationLabeledLocationMeasurement) measurement;
       expectation = new ClassificationMeasurementExpectations.LabeledLocation(
-          (ClassificationLabeledLocationMeasurement) measurement, dataset, documentIndices);
+          locMeas, dataset, documentIndices, locMeas.getMaxNeighbors());
     }
     else{
       throw new IllegalArgumentException("unknown measurement type: "+measurement.getClass().getName());
