@@ -78,13 +78,13 @@ public class BasicClassificationMeasurementModel implements ClassificationMeasur
     
     // update the state in place, variable by variable 
     ClassificationMeasurementModelExpectations expectations = ClassificationMeasurementModelExpectations.from(state);
-    logger.info("LB after initialization: "+lowerBound(state,expectations));
+//    logger.info("LB after initialization: "+lowerBound(state,expectations));
     fitNuTheta(state);
-    logger.info("LB after fitNuTheta: "+lowerBound(state,expectations));
+//    logger.info("LB after fitNuTheta: "+lowerBound(state,expectations));
     fitNuSigma2(state, expectations);
-    logger.info("LB after fitNuSigma2: "+lowerBound(state,expectations));
+//    logger.info("LB after fitNuSigma2: "+lowerBound(state,expectations));
     fitLogNuY(state, expectations);
-    logger.info("LB after fitLogNuY: "+lowerBound(state,expectations));
+//    logger.info("LB after fitLogNuY: "+lowerBound(state,expectations));
     
 //    logger.info("nuTheta="+DoubleArrays.toString(state.getNuTheta()));
 //    logger.info("nuSigma2=\n"+Matrices.toString(state.getNuSigma2()));
