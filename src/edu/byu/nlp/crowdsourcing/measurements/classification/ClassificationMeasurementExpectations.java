@@ -221,7 +221,11 @@ public class ClassificationMeasurementExpectations {
     private void calculateDependentIndices(){
       if (dependentIndices==null){
         this.dependentIndices = Sets.newHashSet();
-        String stemmedPredicate = new PorterStemmer().apply(predicate);
+        String stemmedPredicate = predicate;
+        // if we don't know the predicate word, try stemming it
+        if (!getDataset().getInfo().getFeatureIndexer().contains(predicate)){
+          stemmedPredicate = new PorterStemmer().apply(predicate);
+        }
         Integer wordIndex = getDataset().getInfo().getFeatureIndexer().indexOf(stemmedPredicate);
         // unknown word
 //        if (wordIndex==getDataset().getInfo().getFeatureIndexer().indexOf(null)){
