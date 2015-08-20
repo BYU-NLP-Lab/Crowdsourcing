@@ -44,8 +44,8 @@ import edu.byu.nlp.util.Matrices;
  * @author plf1
  *
  */
-public class BasicClassificationMeasurementModel implements ClassificationMeasurementModel{
-  private static final Logger logger = LoggerFactory.getLogger(BasicClassificationMeasurementModel.class);
+public class PANClassificationMeasurementModel implements ClassificationMeasurementModel{
+  private static final Logger logger = LoggerFactory.getLogger(PANClassificationMeasurementModel.class);
   private static boolean SCALE_MEASUREMENTS = true;
   
   // defines an almost perfectly trusted annotator
@@ -55,7 +55,7 @@ public class BasicClassificationMeasurementModel implements ClassificationMeasur
   private RandomGenerator rnd;
 
   
-  public BasicClassificationMeasurementModel(State state, RandomGenerator rnd) {
+  public PANClassificationMeasurementModel(State state, RandomGenerator rnd) {
     this.state=state;
     this.rnd=rnd;
   }
@@ -540,7 +540,7 @@ public class BasicClassificationMeasurementModel implements ClassificationMeasur
             .build()
             ;
       // create model and initialize variational parameters with an empirical fit
-      BasicClassificationMeasurementModel model = new BasicClassificationMeasurementModel(state,rnd); 
+      PANClassificationMeasurementModel model = new PANClassificationMeasurementModel(state,rnd); 
       model.empiricalFit();
       
       return model; 

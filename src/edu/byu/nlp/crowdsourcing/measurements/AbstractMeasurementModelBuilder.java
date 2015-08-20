@@ -7,7 +7,7 @@ import org.apache.commons.math3.special.Gamma;
 
 import edu.byu.nlp.crowdsourcing.ModelInitialization.AssignmentInitializer;
 import edu.byu.nlp.crowdsourcing.PriorSpecification;
-import edu.byu.nlp.crowdsourcing.measurements.classification.BasicClassificationMeasurementModel;
+import edu.byu.nlp.crowdsourcing.measurements.classification.PANClassificationMeasurementModel;
 import edu.byu.nlp.crowdsourcing.measurements.classification.ClassificationMeasurementModel;
 import edu.byu.nlp.data.types.Dataset;
 import edu.byu.nlp.data.types.Measurement;
@@ -106,11 +106,11 @@ public abstract class AbstractMeasurementModelBuilder {
     }      
 
     public double getPriorAlpha(PriorSpecification priors, int annotator, int trustedAnnotator){
-      return annotator==trustedAnnotator? BasicClassificationMeasurementModel.TRUSTED_ALPHA: priors.getBGamma();
+      return annotator==trustedAnnotator? PANClassificationMeasurementModel.TRUSTED_ALPHA: priors.getBGamma();
     }
 
     public double getPriorBeta(PriorSpecification priors, int annotator, int trustedAnnotator){
-      return annotator==trustedAnnotator? BasicClassificationMeasurementModel.TRUSTED_BETA: priors.getCGamma();
+      return annotator==trustedAnnotator? PANClassificationMeasurementModel.TRUSTED_BETA: priors.getCGamma();
     }
 
     
