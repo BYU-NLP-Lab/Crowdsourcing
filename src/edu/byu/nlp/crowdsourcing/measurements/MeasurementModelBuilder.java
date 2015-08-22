@@ -16,7 +16,7 @@ import edu.byu.nlp.math.GammaFunctions;
 import edu.byu.nlp.util.Counter;
 import edu.byu.nlp.util.DenseCounter;
 
-public abstract class AbstractMeasurementModelBuilder {
+public abstract class MeasurementModelBuilder {
 
   private PriorSpecification priors;
   private RandomGenerator rnd;
@@ -25,34 +25,34 @@ public abstract class AbstractMeasurementModelBuilder {
   private boolean measurementsPreScaled;
   private String trustedMeasurementAnnotator;
 
-  public AbstractMeasurementModelBuilder(){  }
+  public MeasurementModelBuilder(){  }
   
-  public AbstractMeasurementModelBuilder setPriors(PriorSpecification priors){
+  public MeasurementModelBuilder setPriors(PriorSpecification priors){
     this.priors=priors;
     return this;
   }
 
-  public AbstractMeasurementModelBuilder setRnd(RandomGenerator rnd){
+  public MeasurementModelBuilder setRnd(RandomGenerator rnd){
     this.rnd=rnd;
     return this;
   }
 
-  public AbstractMeasurementModelBuilder setData(Dataset data) {
+  public MeasurementModelBuilder setData(Dataset data) {
     this.data = data;
     return this;
   }
 
-  public AbstractMeasurementModelBuilder setYInitializer(AssignmentInitializer yInitializer){
+  public MeasurementModelBuilder setYInitializer(AssignmentInitializer yInitializer){
     this.yInitializer=yInitializer;
     return this;
   }
 
-  public AbstractMeasurementModelBuilder setMeasurementsArePreScaled(boolean measurementsPreScaled){
+  public MeasurementModelBuilder setMeasurementsArePreScaled(boolean measurementsPreScaled){
     this.measurementsPreScaled=measurementsPreScaled;
     return this;
   }
 
-  public AbstractMeasurementModelBuilder setTrustedAnnotator(String trustedMeasurementAnnotator) {
+  public MeasurementModelBuilder setTrustedAnnotator(String trustedMeasurementAnnotator) {
     this.trustedMeasurementAnnotator=trustedMeasurementAnnotator;
     return this;
   }

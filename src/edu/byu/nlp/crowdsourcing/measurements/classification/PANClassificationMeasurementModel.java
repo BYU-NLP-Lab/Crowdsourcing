@@ -28,7 +28,7 @@ import com.google.common.base.Preconditions;
 import edu.byu.nlp.classify.data.DatasetLabeler;
 import edu.byu.nlp.classify.eval.Predictions;
 import edu.byu.nlp.crowdsourcing.PriorSpecification;
-import edu.byu.nlp.crowdsourcing.measurements.AbstractMeasurementModelBuilder;
+import edu.byu.nlp.crowdsourcing.measurements.MeasurementModelBuilder;
 import edu.byu.nlp.crowdsourcing.measurements.MeasurementExpectation;
 import edu.byu.nlp.crowdsourcing.measurements.classification.ClassificationMeasurementExpectations.ScaledMeasurementExpectation;
 import edu.byu.nlp.crowdsourcing.models.meanfield.MeanFieldMultiRespModel;
@@ -517,7 +517,7 @@ public class PANClassificationMeasurementModel implements ClassificationMeasurem
   
   
   
-  public static class Builder extends AbstractMeasurementModelBuilder{
+  public static class Builder extends MeasurementModelBuilder{
     /** {@inheritDoc} */
     @Override
     protected ClassificationMeasurementModel buildModel(PriorSpecification priors, Dataset data, int[] y,

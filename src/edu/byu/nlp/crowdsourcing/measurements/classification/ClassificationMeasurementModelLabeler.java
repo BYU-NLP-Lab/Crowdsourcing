@@ -29,7 +29,7 @@ import edu.byu.nlp.classify.eval.Prediction;
 import edu.byu.nlp.classify.eval.Predictions;
 import edu.byu.nlp.classify.util.ModelTraining;
 import edu.byu.nlp.classify.util.ModelTraining.IntermediatePredictionLogger;
-import edu.byu.nlp.crowdsourcing.measurements.AbstractMeasurementModelBuilder;
+import edu.byu.nlp.crowdsourcing.measurements.MeasurementModelBuilder;
 import edu.byu.nlp.crowdsourcing.measurements.MeasurementExpectation;
 import edu.byu.nlp.data.measurements.ClassificationMeasurements.ClassificationAnnotationMeasurement;
 import edu.byu.nlp.data.measurements.ClassificationMeasurements.ClassificationLabeledLocationMeasurement;
@@ -46,12 +46,12 @@ import edu.byu.nlp.util.Iterables2;
  */
 public class ClassificationMeasurementModelLabeler implements DatasetLabeler{
 
-  private AbstractMeasurementModelBuilder builder;
+  private MeasurementModelBuilder builder;
   private ClassificationMeasurementModel model;
   private IntermediatePredictionLogger intermediatePredictionLogger;
   private String trainingOperations;
 
-  public ClassificationMeasurementModelLabeler(AbstractMeasurementModelBuilder builder, String trainingOperations, IntermediatePredictionLogger intermediatePredictionLogger) {
+  public ClassificationMeasurementModelLabeler(MeasurementModelBuilder builder, String trainingOperations, IntermediatePredictionLogger intermediatePredictionLogger) {
     this.builder=builder;
     this.trainingOperations=trainingOperations;
     this.intermediatePredictionLogger=intermediatePredictionLogger;

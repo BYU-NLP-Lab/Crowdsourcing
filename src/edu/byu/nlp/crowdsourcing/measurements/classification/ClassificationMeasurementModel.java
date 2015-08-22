@@ -8,7 +8,7 @@ import com.google.gson.Gson;
 
 import edu.byu.nlp.classify.util.ModelTraining.SupportsTrainingOperations;
 import edu.byu.nlp.crowdsourcing.PriorSpecification;
-import edu.byu.nlp.crowdsourcing.measurements.AbstractMeasurementModelBuilder.StaticMeasurementModelCounts;
+import edu.byu.nlp.crowdsourcing.measurements.MeasurementModelBuilder.StaticMeasurementModelCounts;
 import edu.byu.nlp.data.types.Dataset;
 import edu.byu.nlp.data.types.DatasetInstance;
 import edu.byu.nlp.util.Matrices;
