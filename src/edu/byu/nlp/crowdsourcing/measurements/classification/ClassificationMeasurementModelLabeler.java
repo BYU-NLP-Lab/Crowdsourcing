@@ -64,11 +64,9 @@ public class ClassificationMeasurementModelLabeler implements DatasetLabeler{
   /** {@inheritDoc} */
   @Override
   public Predictions label(Dataset trainingInstances, Dataset heldoutInstances) {
-    // if necessary, build and train a model 
-    if (this.model == null){
-      model = builder.build();
-      ModelTraining.doOperations(trainingOperations, model, intermediatePredictionLogger);
-    }
+    // build and train a model 
+    model = builder.build();
+    ModelTraining.doOperations(trainingOperations, model, intermediatePredictionLogger);
     
     ClassificationMeasurementModel.State modelState = model.getCurrentState();
     ClassificationMeasurementModelExpectations expectations = ClassificationMeasurementModelExpectations.from(modelState); 

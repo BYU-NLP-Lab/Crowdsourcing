@@ -23,6 +23,7 @@ import org.slf4j.LoggerFactory;
 
 import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.Lists;
+import com.google.common.collect.Maps;
 import com.google.common.collect.Multimap;
 
 import edu.byu.nlp.crowdsourcing.measurements.MeasurementExpectation;
@@ -46,6 +47,7 @@ public class ClassificationMeasurementModelExpectations {
   private Map<Integer, Collection<MeasurementExpectation<Integer>>> measurementsForAnnotator;
   private Map<Pair<Integer,Integer>, Collection<MeasurementExpectation<Integer>>> measurementsForAnnotatorAndDocIndex;
   private Map<Triple<Integer, Integer,Integer>, Collection<MeasurementExpectation<Integer>>> measurementsForAnnotatorDocIndexAndLabel;
+  private Map<Measurement, MeasurementExpectation<Integer>> measurementLookup;
 
   private ClassificationMeasurementModelExpectations() {}
 
@@ -71,6 +73,10 @@ public class ClassificationMeasurementModelExpectations {
     return nonNullCollection(measurementsForDocIndex.get(docIndex));
   }
   
+  public MeasurementExpectation<Integer> getExpectationForMeasurement(Measurement measurement){
+    return measurementLookup.get(measurement);
+  }
+  
   private static <T> Collection<T> nonNullCollection(Collection<T> baseCollection){
     if (baseCollection==null){
       return Lists.newArrayList();
@@ -88,11 +94,13 @@ public class ClassificationMeasurementModelExpectations {
       Multimap<Integer, MeasurementExpectation<Integer>> perAnnotator = ArrayListMultimap.create();
       Multimap<Pair<Integer,Integer>, MeasurementExpectation<Integer>> perAnnotatorAndDocIndex = ArrayListMultimap.create(); 
       Multimap<Triple<Integer, Integer,Integer>, MeasurementExpectation<Integer>> perAnnotatorDocIndexAndLabel = ArrayListMultimap.create();
+      measurementLookup = Maps.newHashMap();
 
       // initialize each measurement expectation with the data (and index it for easy lookup)
       for (Measurement measurement : dataset.getMeasurements()) {
         int label = ((ClassificationMeasurement)measurement).getLabel();
         MeasurementExpectation<Integer> expectation = ClassificationMeasurementExpectations.fromMeasurement(measurement, dataset, instanceIndices, logNuY);
+        measurementLookup.put(measurement, expectation);
         if (expectation.getDependentIndices().size()==0){
           // ignore measurements that don't apply to any documents
           expectationTypes.incrementCount("Ineffective+"+measurement.getClass().getSimpleName(), 1);
