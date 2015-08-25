@@ -15,8 +15,10 @@
  */
 package edu.byu.nlp.crowdsourcing.models.meanfield;
 
+import java.io.PrintWriter;
 import java.util.List;
 
+import com.google.common.base.Joiner;
 import com.google.common.collect.Lists;
 
 import edu.byu.nlp.classify.data.DatasetLabeler;
@@ -28,6 +30,8 @@ import edu.byu.nlp.classify.util.ModelTraining.IntermediatePredictionLogger;
 import edu.byu.nlp.crowdsourcing.CrowdsourcingUtils;
 import edu.byu.nlp.crowdsourcing.MultiAnnModel;
 import edu.byu.nlp.crowdsourcing.MultiAnnModelBuilders.MultiAnnModelBuilder;
+import edu.byu.nlp.crowdsourcing.models.em.CSLDADiscreteModel;
+import edu.byu.nlp.crowdsourcing.models.em.CSLDADiscreteModel.State;
 import edu.byu.nlp.data.types.Dataset;
 import edu.byu.nlp.data.types.DatasetInstance;
 import edu.byu.nlp.util.DoubleArrays;
@@ -45,11 +49,13 @@ public class MeanFieldMultiAnnLabeler implements DatasetLabeler{
   private MultiAnnModel model;
   private String trainingOperations;
   private IntermediatePredictionLogger intermediatePredictionLogger;
+private PrintWriter serializeOut;
 
-  public MeanFieldMultiAnnLabeler(MultiAnnModelBuilder modelBuilder, String trainingOperations, IntermediatePredictionLogger intermediatePredictionLogger) {
+  public MeanFieldMultiAnnLabeler(MultiAnnModelBuilder modelBuilder, String trainingOperations, IntermediatePredictionLogger intermediatePredictionLogger, PrintWriter serializeOut) {
     this.modelBuilder=modelBuilder;
     this.trainingOperations=trainingOperations;
     this.intermediatePredictionLogger=intermediatePredictionLogger;
+    this.serializeOut=serializeOut;
   }
   public MeanFieldMultiAnnLabeler(MultiAnnModel model) {
     this.model=model;
@@ -66,6 +72,23 @@ public class MeanFieldMultiAnnLabeler implements DatasetLabeler{
     
     MeanFieldMultiAnnState state = (MeanFieldMultiAnnState) model.getCurrentState();
     Dataset data = state.getData();
+    
+    // save state
+//    state.getMaxent().get // TODO
+    if (serializeOut!=null){
+	    double[] params = MalletInterface.getEtaRow(0, state);
+	    double[] neg = MalletInterface.getEtaRow(1, state);
+	    DoubleArrays.subtractToSelf(params, neg);
+	    List<String> colnames = Lists.newArrayList();
+	    for (int i=0; i<params.length; i++){
+	    	colnames.add("d"+(i+1));
+	    }
+	    // header
+	    serializeOut.write(Joiner.on(",").join(colnames));
+	    serializeOut.write("\n");
+	    // body
+	    serializeOut.write(Joiner.on(",").join(DoubleArrays.asList(params)));
+    }
     
     // corpus predictions 
     List<Prediction> labeledPredictions = Lists.newArrayList();
@@ -175,5 +198,33 @@ public class MeanFieldMultiAnnLabeler implements DatasetLabeler{
     return accuracies;
   }
 
+  
+  
+  
+
+  /**
+   * hard-coded snippet to record maxent parameter values for twitter paraphrase
+   * 
+   * 2 classes x ...
+   * 
+   * twitterparaphrase dimensions:
+   * cos = 1
+   * l1 = 1
+   * l2 = 1
+   * pca(v1) = 50
+   * pca(v2) = 50
+   * pca(v1)-pca(v2) = 50
+   */
+
+  private static class MalletInterface {
+
+    public static double[] getEtaRow(int documentClass, MeanFieldMultiAnnState s) {
+      int length = 1 + 1 + 1 + 50 + 50 + 50 + 1; // extra 1 is for bias term
+      double[] parameters = new double[length];
+      int srcPos = documentClass*(length);
+      System.arraycopy(s.getMaxent().getParameters(), srcPos, parameters, 0, parameters.length);
+      return parameters;
+    }
+  }
 
 }
