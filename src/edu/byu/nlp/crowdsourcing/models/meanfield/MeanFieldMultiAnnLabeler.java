@@ -80,8 +80,16 @@ private PrintWriter serializeOut;
 	    double[] neg = MalletInterface.getEtaRow(1, state);
 	    DoubleArrays.subtractToSelf(params, neg);
 	    List<String> colnames = Lists.newArrayList();
+	    int maxDigits = (int)Math.floor(Math.log10(params.length))+1;
 	    for (int i=0; i<params.length; i++){
-	    	colnames.add("d"+(i+1));
+		    int thisDigits = i==0? 1: (int)Math.floor(Math.log10(i))+1;
+		    StringBuilder colname = new StringBuilder();
+	    	for (int j=0; j<(maxDigits-thisDigits); j++){
+	    		colname.append("0");
+	    	}
+	    	colname.append(i);
+	    	
+	    	colnames.add(colname.toString());
 	    }
 	    // header
 	    serializeOut.write(Joiner.on(",").join(colnames));
