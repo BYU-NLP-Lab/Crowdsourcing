@@ -47,7 +47,7 @@ import edu.byu.nlp.util.Iterables2;
 public class ClassificationMeasurementModelLabeler implements DatasetLabeler{
 
   private MeasurementModelBuilder builder;
-  private ClassificationMeasurementModel model;
+  public ClassificationMeasurementModel model;
   private IntermediatePredictionLogger intermediatePredictionLogger;
   private String trainingOperations;
 
@@ -65,8 +65,10 @@ public class ClassificationMeasurementModelLabeler implements DatasetLabeler{
   @Override
   public Predictions label(Dataset trainingInstances, Dataset heldoutInstances) {
     // build and train a model 
-    model = builder.build();
-    ModelTraining.doOperations(trainingOperations, model, intermediatePredictionLogger);
+	if (builder!=null) {
+	    model = builder.build();
+	    ModelTraining.doOperations(trainingOperations, model, intermediatePredictionLogger);
+	}
     
     ClassificationMeasurementModel.State modelState = model.getCurrentState();
     ClassificationMeasurementModelExpectations expectations = ClassificationMeasurementModelExpectations.from(modelState); 

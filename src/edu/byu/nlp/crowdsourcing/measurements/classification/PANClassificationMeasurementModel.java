@@ -48,8 +48,12 @@ public class PANClassificationMeasurementModel implements ClassificationMeasurem
   private static final Logger logger = LoggerFactory.getLogger(PANClassificationMeasurementModel.class);
   private static boolean SCALE_MEASUREMENTS = true;
   
-  // defines an almost perfectly trusted annotator
+  // Main experiment prior
+  // defines an almost perfectly trusted annotator (for the proportion measurements of the main experiment)
   public static final double TRUSTED_ALPHA = 1e6, TRUSTED_BETA = 1.1;
+  // Qualitative example prior (alice, bob, carol, dave)
+//  // defines an almost perfectly trusted annotator (for "dave" in the artificial experiment with alice/bob/carol/dave)
+//  public static final double TRUSTED_ALPHA = 2, TRUSTED_BETA = 1.1;
 
   private State state;
   private RandomGenerator rnd;

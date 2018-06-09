@@ -115,7 +115,7 @@ public class ClassificationMeasurementModelExpectations {
           }
         }
       }
-      logger.info("Measurement Types: "+expectationTypes);
+      logger.debug("Measurement Types: "+expectationTypes);
 
       measurementsForAnnotator = perAnnotator.asMap();
       measurementsForAnnotatorAndDocIndex = perAnnotatorAndDocIndex.asMap();
